@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Вайб 2021 — Promo15</title>
+  <meta name="description" content="Тот самый вайб 2021 года: приветствие, таймер с 01.01.2021, картинка и кнопка на канал." />
+  <style>
+  :root{ --bgImage: url('https://i.ibb.co/C30Q1x8C/photo-2025-08-21-20-05-42.jpg'); --ink:#e9edf1; --muted:#a7b0c0; --stroke:rgba(255,255,255,.10); --bgBrightness:1.25; --bgSaturate:1.1; }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; color:var(--ink);
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", sans-serif; line-height:1.6;
+    min-height:100dvh;
+  }
+  /* Фон: ваша картинка + затемняющий градиент для читабельности */
+  body::before{content:""; position:fixed; inset:0; background-image: var(--bgImage); background-position:center; background-repeat:no-repeat; background-size:cover; filter: brightness(var(--bgBrightness)) saturate(var(--bgSaturate)); z-index:-2}
+  body::after{content:""; position:fixed; inset:0; background: radial-gradient(1200px 800px at 10% -20%, rgba(27,30,54,.35), rgba(15,18,33,.70)); z-index:-1}
+
+  .wrap{max-width:1000px; margin:auto; padding:28px 18px 42px}
+  header{padding:28px; background:rgba(255,255,255,.06); border:1px solid var(--stroke); border-radius:18px; backdrop-filter:blur(8px)}
+  h1{margin:0 0 10px; font-size: clamp(28px, 5vw, 44px)}
+  .greeting{white-space: pre-line; margin:0}
+  .counter{display:flex; flex-wrap:wrap; gap:12px; margin-top:14px}
+  .pill{padding:10px 14px; border-radius:999px; background:rgba(13,19,40,.85); border:1px solid var(--stroke)}
+  .links{display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-top:18px}
+  .btn{display:inline-flex; align-items:center; justify-content:center; gap:10px; padding:14px 18px; border-radius:12px;
+       border:1px solid rgba(255,255,255,.14); background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+       color:var(--ink); text-decoration:none; font-weight:700; letter-spacing:.2px; transition:transform .15s ease, box-shadow .15s ease}
+  .btn:hover{transform:translateY(-1px); box-shadow:0 8px 22px rgba(0,0,0,.35)}
+  footer{margin-top:28px; text-align:center; color:var(--muted); font-size:14px}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Вайб 2021</h1>
+      <p class="greeting">Всем привет ребята! Это сайт моего канала — тут в принципе тот самый вайб 2021 года...
+Время идёт очень быстро — с 01.01.2021 прошло <strong><span id="days-inline">0</span></strong> дней.
+Сейчас <strong><span id="current-year"></span></strong> год. Под этим текстом будет картинка, которую я прислал.
+Хочу для вас оставить ссылки на свои каналы (YouTube и т. д.). Уже нет того вайба, который был в те годы —
+2021 год остался в наших хороших воспоминаниях. Внизу — кнопка перехода на мой канал.</p>
+      <div class="counter">
+        <div class="pill"><strong id="days-since">0</strong> дней с 01.01.2021</div>
+        <div class="pill">Сегодня: <span id="today"></span></div>
+      </div>
+    </header>
+
+    <!-- Картинка теперь используется как ФОН сайта (см. CSS выше). -->
+
+    <section class="links" aria-label="Мои ссылки">
+      <a class="btn" href="https://www.youtube.com/@Promo15_Official" target="_blank" rel="noopener">Перейти на канал</a>
+    </section>
+
+    <footer>© <span id="year"></span> Promo15_Official</footer>
+  </div>
+
+  <script>
+(function(){
+  function calcDaysSince2021(){
+    const startUTC = Date.UTC(2021, 0, 1); // полночь 01.01.2021 UTC
+    const now = new Date();
+    const todayUTC = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+    const days = Math.floor((todayUTC - startUTC) / 86400000);
+
+    const daysStr = days.toLocaleString('ru-RU');
+    const todayStr = now.toLocaleDateString('ru-RU', {year:'numeric', month:'long', day:'numeric'});
+
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    set('days-since', daysStr);
+    set('days-inline', daysStr);
+    set('today', todayStr);
+    set('current-year', now.getFullYear());
+    set('year', now.getFullYear());
+  }
+  calcDaysSince2021();
+  // Обновление раз в минуту
+  setInterval(calcDaysSince2021, 60000);
+})();
+</script>
+</body>
+</html>
