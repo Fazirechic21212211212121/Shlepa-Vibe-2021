@@ -27,10 +27,22 @@
   .links{display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-top:18px}
   .btn{display:inline-flex; align-items:center; justify-content:center; gap:10px; padding:14px 18px; border-radius:12px;
        border:1px solid rgba(255,255,255,.14); background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
-       color:var(--ink); text-decoration:none; font-weight:700; letter-spacing:.2px; transition:transform .15s ease, box-shadow .15s ease}
+       color:var(--ink); text-decoration:none; font-weight:700; letter-spacing:.2px; transition:transform .15s ease, box-shadow .15s ease; cursor:pointer}
   .btn:hover{transform:translateY(-1px); box-shadow:0 8px 22px rgba(0,0,0,.35)}
   footer{margin-top:28px; text-align:center; color:var(--muted); font-size:14px}
-</style>
+
+  /* NEW: стили «Библиолетки» */
+  .library-overlay{position:fixed; inset:0; display:none; z-index:9999; background:rgba(5,8,20,.85); backdrop-filter:blur(6px)}
+  .library-overlay.open{display:grid; place-items:center}
+  .library-panel{width:min(1100px,96vw); height:min(85vh,900px); background:rgba(255,255,255,.06); border:1px solid var(--stroke); border-radius:18px; overflow:hidden; display:grid; grid-template-rows:auto 1fr}
+  .library-header{display:flex; align-items:center; gap:10px; padding:10px 12px; border-bottom:1px solid var(--stroke); background:rgba(13,19,40,.9)}
+  .back-btn{display:inline-flex; align-items:center; justify-content:center; padding:8px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.14); background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)); color:var(--ink); font-weight:700; cursor:pointer}
+  .library-title{margin-left:6px; font-weight:700}
+  .library-body{position:relative}
+  .library-iframe{position:absolute; inset:0; width:100%; height:100%; border:0; background:rgba(0,0,0,.2)}
+  .library-fallback{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:18px; text-align:center}
+  .muted{color:var(--muted); font-size:14px}
+  </style>
 </head>
 <body>
   <div class="wrap">
@@ -43,7 +55,7 @@
 2021 год остался в наших хороших воспоминаниях Или всё ещё есть шанс восстановить эти годы? Давайте все вместе попробуем!
 Весь TikTok уже пытается. Если хотите присоединиться к нам, просто нажмите «Перейти на канал» — тогда вы автоматически становитесь участником восстановления 2021 года.
 
-Необязательно! Если хотите, можете зайти на канал и всё равно не будете участником, если так пожелаете.  . Внизу — кнопка перехода на мой канал.</p>
+Необязательно! Если хотите, можете зайти на канал и всё равно не будете участником, если так пожелаете. Внизу — кнопка перехода на мой канал.</p>
       <div class="counter">
         <div class="pill"><strong id="days-since">0</strong> дней с 01.01.2021</div>
         <div class="pill">Сегодня: <span id="today"></span></div>
@@ -54,9 +66,37 @@
 
     <section class="links" aria-label="Мои ссылки">
       <a class="btn" href="https://www.youtube.com/@Promo15_Official" target="_blank" rel="noopener">Перейти на канал</a>
+      <!-- NEW: кнопка TikTok -->
+      <a class="btn" href="https://www.tiktok.com/@richardbabayan0" target="_blank" rel="noopener">Перейти в TikTok</a>
+      <!-- NEW: кнопка «Библиолетка» (открывает оверлей) -->
+      <button class="btn" id="open-library" type="button">Библиолетка</button>
     </section>
 
     <footer>© <span id="year"></span> Promo15_Official</footer>
+  </div>
+
+  <!-- NEW: Оверлей «Библиолетка» -->
+  <div class="library-overlay" id="library-overlay" aria-hidden="true">
+    <div class="library-panel" role="dialog" aria-modal="true" aria-labelledby="library-title">
+      <div class="library-header">
+        <button class="back-btn" id="library-close" aria-label="Назад">← Назад</button>
+        <div class="library-title" id="library-title">Библиолетка — «вайб 2021 год шлепа анонимус скала балди слендер мен»</div>
+      </div>
+      <div class="library-body">
+        <!-- Пытаемся встроить поиск TikTok по запросу -->
+        <iframe id="library-iframe" class="library-iframe" title="TikTok Search"
+          loading="lazy"
+          referrerpolicy="no-referrer"
+          sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox">
+        </iframe>
+        <!-- Фолбэк, если встраивание будет заблокировано -->
+        <div id="library-fallback" class="library-fallback" hidden>
+          <h3>Открыть видео в TikTok</h3>
+          <p class="muted">Похоже, TikTok запрещает встраивание поиска в другие сайты. Нажмите кнопку ниже, чтобы открыть все видео по запросу «вайб 2021 год» в новой вкладке.</p>
+          <a class="btn" href="https://www.tiktok.com/search?q=%D0%B2%D0%B0%D0%B9%D0%B1%202021%20%D0%B3%D0%BE%D0%B4" target="_blank" rel="noopener">Открыть поиск на TikTok</a>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -80,6 +120,54 @@
   calcDaysSince2021();
   // Обновление раз в минуту
   setInterval(calcDaysSince2021, 60000);
+
+  // NEW: логика «Библиолетки»
+  const openBtn = document.getElementById('open-library');
+  const overlay = document.getElementById('library-overlay');
+  const closeBtn = document.getElementById('library-close');
+  const iframe = document.getElementById('library-iframe');
+  const fallback = document.getElementById('library-fallback');
+
+  const tiktokSearchURL = 'https://www.tiktok.com/search?q=%D0%B2%D0%B0%D0%B9%D0%B1%202021%20%D0%B3%D0%BE%D0%B4';
+
+  function openLibrary(){
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden', 'false');
+
+    // Пытаемся загрузить поиск в iframe (может быть заблокировано политикой X-Frame-Options)
+    fallback.hidden = true;
+    iframe.src = tiktokSearchURL;
+
+    // Если через 2500 мс ничего внятного не отрисовано — показываем фолбэк-кнопку
+    // (надёжно детектировать блокировку нельзя, поэтому используем таймаут).
+    setTimeout(()=>{ 
+      // Если пользователь уже закрыл — ничего не делаем
+      if(!overlay.classList.contains('open')) return;
+      // Показываем фолбэк поверх iframe
+      fallback.hidden = false;
+    }, 2500);
+  }
+
+  function closeLibrary(){
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden', 'true');
+    // Сбрасываем iframe, чтобы остановить загрузку/звук
+    iframe.src = 'about:blank';
+    fallback.hidden = true;
+  }
+
+  openBtn?.addEventListener('click', openLibrary);
+  closeBtn?.addEventListener('click', closeLibrary);
+
+  // Закрытие по Esc
+  window.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape' && overlay.classList.contains('open')) closeLibrary();
+  });
+
+  // Клик по фону закрывает оверлей
+  overlay?.addEventListener('click', (e)=>{
+    if(e.target === overlay) closeLibrary();
+  });
 })();
 </script>
 </body>
