@@ -1,4 +1,10 @@
 <!DOCTYPE html>
+<script>
+  if (location.protocol !== 'https:' && location.hostname.endsWith('shlepa.fun')) {
+    location.replace('https://' + location.hostname + location.pathname + location.search + location.hash);
+  }
+</script>
+
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
