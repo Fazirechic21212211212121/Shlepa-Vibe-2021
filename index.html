@@ -346,19 +346,18 @@
 
   // ---- ТВОЯ КОНФИГУРАЦИЯ (ЗАМЕНИ НА СВОЮ) ----
   const firebaseConfig = {
-    apiKey: "AIzaSyCTbrBE04f9s85V5vF565b1J89htP-QjWE",
-    authDomain: "shlepa-f7e06.firebaseapp.com",
-    projectId: "shlepa-f7e06",
-    storageBucket: "shlepa-f7e06.firebasestorage.app",
-    messagingSenderId: "453452313107",
-    appId: "1:453452313107:web:c3a63a4de656e07df605e6"
+    apiKey: "PASTE_YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "",
+    appId: ""
   };
 
- // Админы модерации (разрешено подтверждать фото approved=true)
-const ADMIN_UIDS = [
-  "YENSqygLKrQ4PMMbcEG4109jSST2"
-];
-
+  // Админы модерации (разрешено подтверждать фото approved=true)
+  const ADMIN_UIDS = [
+    // 'UID_СЮДА' 
+  ];
 
   // ---- Инициализация ----
   const app = initializeApp(firebaseConfig);
@@ -542,12 +541,51 @@ const ADMIN_UIDS = [
   // ---- Состояние пользователя и отрисовка правого угла ----
   onAuthStateChanged(auth, async (user)=>{
     currentUser = user;
+
+    // Вспомогательные отрисовки (чтобы не дублировать код)
+    const renderLoggedIn = (u)=>{
+      authbox.innerHTML = '';
+      const btn = document.createElement('button');
+      btn.className='btn ghost'; btn.id='open-profile';
+      const img = document.createElement('img');
+      img.className='avatar'; img.id='mini-avatar'; img.alt='Аватар';
+      img.src = u.photoURL || 'https://i.pravatar.cc/64?u='+u.uid;
+      btn.appendChild(img);
+      btn.appendChild(document.createTextNode(' Профиль'));
+      btn.addEventListener('click', openProfile);
+      authbox.appendChild(btn);
+    };
+    const renderLoggedOut = ()=>{
+      authbox.innerHTML = '';
+      const btn = document.createElement('button');
+      btn.className='btn'; btn.id='open-login'; btn.textContent='Войти / Регистрация';
+      btn.addEventListener('click', openAuth);
+      authbox.appendChild(btn);
+    };
+
     if (user){
-      // создать профиль, если нет
-      const uref = doc(db,'users', user.uid);
-      const udoc = await getDoc(uref);
-      if (!udoc.exists()){
-        await setDoc(uref, { displayName: user.displayName||'', email: user.email||'', photoURL: user.photoURL||'', createdAt: serverTimestamp() });
+      // 1) Рисуем UI сразу, даже если Firestore даст ошибку — чтобы после входа профиль отображался.
+      renderLoggedIn(user);
+
+      // 2) Профиль в Firestore пытаемся создать/получить, но не ломаем UI, если нет прав/БД
+      try{
+        const uref = doc(db,'users', user.uid);
+        const udoc = await getDoc(uref);
+        if (!udoc.exists()){
+          await setDoc(uref, {
+            displayName: user.displayName||'',
+            email: user.email||'',
+            photoURL: user.photoURL||'',
+            createdAt: serverTimestamp()
+          });
+        }
+      }catch(e){
+        console.warn('Не удалось получить/создать документ профиля:', e);
+      }
+    } else {
+      renderLoggedOut();
+    }
+  });
       }
       // Правый угол: аватар + Профиль
       authbox.innerHTML = '';
