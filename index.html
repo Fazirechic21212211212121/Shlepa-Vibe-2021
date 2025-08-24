@@ -356,7 +356,7 @@
 
   // Админы модерации (разрешено подтверждать фото approved=true)
   const ADMIN_UIDS = [
-    // 'UID_СЮДА' 
+    "YENSqygLKrQ4PMMbcEG4109jSST2"
   ];
 
   // ---- Инициализация ----
@@ -584,21 +584,6 @@
       }
     } else {
       renderLoggedOut();
-    }
-  });
-      }
-      // Правый угол: аватар + Профиль
-      authbox.innerHTML = '';
-      const btn = document.createElement('button'); btn.className='btn ghost'; btn.id='open-profile';
-      const img = document.createElement('img'); img.className='avatar'; img.id='mini-avatar'; img.alt='Аватар'; img.src=user.photoURL||'https://i.pravatar.cc/64?u='+user.uid;
-      btn.appendChild(img); btn.appendChild(document.createTextNode(' Профиль'));
-      btn.addEventListener('click', openProfile);
-      authbox.appendChild(btn);
-    } else {
-      authbox.innerHTML = '';
-      const btn = document.createElement('button'); btn.className='btn'; btn.id='open-login'; btn.textContent='Войти / Регистрация';
-      btn.addEventListener('click', openAuth);
-      authbox.appendChild(btn);
     }
   });
 
