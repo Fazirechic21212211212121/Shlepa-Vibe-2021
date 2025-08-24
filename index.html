@@ -290,10 +290,10 @@
             <div id="prof-email" class="rules"></div>
           </div>
         </div>
-        <div class="field">
-          <label for="prof-avatar-file">Сменить аватар</label>
-          <input id="prof-avatar-file" class="file" type="file" accept="image/*" />
-          <div class="hint">JPG/PNG до 5 МБ. Совет: квадратная картинка 512×512.</div>
+        $1
+        <div class="actions hidden" id="prof-publish-actions">
+          <button class="btn" id="prof-cancel-draft">Отменить</button>
+          <button class="btn primary" id="prof-publish">Опубликовать профиль</button>
         </div>
         <div class="actions">
           <button class="btn" id="to-my-photos">Мои фото</button>
@@ -346,12 +346,12 @@
 
   // ---- ТВОЯ КОНФИГУРАЦИЯ (ЗАМЕНИ НА СВОЮ) ----
   const firebaseConfig = {
-    apiKey: "PASTE_YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT.appspot.com",
-    messagingSenderId: "",
-    appId: ""
+    apiKey: "AIzaSyCTbrBE04f9s85V5vF565b1J89htP-QjWE",
+    authDomain: "shlepa-f7e06.firebaseapp.com",
+    projectId: "shlepa-f7e06",
+    storageBucket: "shlepa-f7e06.firebasestorage.app",
+    messagingSenderId: "453452313107",
+    appId: "1:453452313107:web:c3a63a4de656e07df605e6"
   };
 
   // Админы модерации (разрешено подтверждать фото approved=true)
@@ -435,13 +435,18 @@
   const profAvatarFile = $('#prof-avatar-file');
   const toMyPhotos = $('#to-my-photos');
   const logoutBtn = $('#logout');
+  const profPublish = $('#prof-publish');
+  const profCancelDraft = $('#prof-cancel-draft');
+  const profPublishActions = $('#prof-publish-actions');
 
   // Состояние
   let currentUser = null;
   let unsubPhotos = null; // отписка от подписки на галерею
   let openPhotoId = null; // id открытого фото
   let unsubComments = null; // отписка комментариев
-  let unsubLikes = null; // отписка лайков
+  let unsubLikes = null;
+  let pendingAvatarFile = null;
+  let pendingAvatarPreviewURL = null; // отписка лайков
 
   // ---- Навигация и модалки ----
   function openModal(el){ el.classList.add('open'); el.setAttribute('aria-hidden','false'); }
@@ -594,14 +599,45 @@
     profName.textContent = currentUser.displayName || '(без имени)';
     profEmail.textContent = currentUser.email || '';
   }
-  profAvatarFile.addEventListener('change', async (e)=>{
-    const f = e.target.files?.[0]; if(!f || !currentUser) return;
+  // превью + отложенная публикация аватара
+  profAvatarFile.addEventListener('change', (e)=>{
+    const f = e.target.files?.[0];
+    if (!f || !currentUser) return;
     if (f.size > 5*1024*1024) { alert('Слишком большой файл (>5 МБ)'); return; }
+    pendingAvatarFile = f;
+    if (pendingAvatarPreviewURL) URL.revokeObjectURL(pendingAvatarPreviewURL);
+    pendingAvatarPreviewURL = URL.createObjectURL(f);
+    profAvatar.src = pendingAvatarPreviewURL;
+    profPublishActions?.classList.remove('hidden');
+  });
+  
+  // Опубликовать профиль
+  profPublish?.addEventListener('click', async ()=>{
+    if (!currentUser || !pendingAvatarFile) return;
     try{
       const r = sRef(storage, `avatars/${currentUser.uid}.jpg`);
-      await uploadBytes(r, f);
+      await uploadBytes(r, pendingAvatarFile);
       const url = await getDownloadURL(r);
       await updateProfile(currentUser, { photoURL: url });
+      await updateDoc(doc(db,'users', currentUser.uid), { photoURL: url });
+      const mini = $('#mini-avatar'); if (mini) mini.src = url;
+      if (pendingAvatarPreviewURL) { URL.revokeObjectURL(pendingAvatarPreviewURL); pendingAvatarPreviewURL=null; }
+      pendingAvatarFile = null;
+      profPublishActions?.classList.add('hidden');
+      renderProfile();
+      alert('Профиль опубликован!');
+    }catch(err){
+      alert('Не удалось опубликовать профиль: '+(err?.message||err));
+    }
+  });
+  
+  // Отменить черновик
+  profCancelDraft?.addEventListener('click', ()=>{
+    pendingAvatarFile = null;
+    if (pendingAvatarPreviewURL) { URL.revokeObjectURL(pendingAvatarPreviewURL); pendingAvatarPreviewURL=null; }
+    profPublishActions?.classList.add('hidden');
+    renderProfile();
+  });
       await updateDoc(doc(db,'users', currentUser.uid), { photoURL: url });
       const mini = $('#mini-avatar'); if (mini) mini.src = url;
       renderProfile();
@@ -634,7 +670,9 @@
         approved: false // модерация
       });
       closeModal(uploadModal);
-      alert('Фото отправлено на модерацию!');
+      openLibrary('gallery');
+      listenGallery(true);
+      alert('Фото отправлено на модерацию! Посмотрите его в разделе «Мои фото».');
     }catch(err){ alert('Загрузка не удалась: '+(err?.message||err)); }
   });
 
