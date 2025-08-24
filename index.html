@@ -147,6 +147,7 @@
         <div class="panel-tabs">
           <button class="panel-tab active" data-tab="gallery">Библиолетка</button>
           <button class="panel-tab" data-tab="tiktok">Библиолетка TikTok</button>
+          <button class="panel-tab hidden" data-tab="mod" id="tab-mod-btn">Модерация</button>
         </div>
       </div>
       <div class="panel-body">
@@ -157,6 +158,14 @@
             <button class="btn primary" id="add-photo">✚ Добавить фото</button>
           </div>
           <div id="gallery-grid" class="grid" aria-live="polite"></div>
+        </div>
+
+        <!-- TAB: Модерация (только для админов) -->
+        <div id="tab-mod" class="tab" role="region" aria-label="Модерация">
+          <div class="gallery-toolbar">
+            <div class="rules">Только администраторы видят эту вкладку. Здесь можно одобрять или отклонять фото.</div>
+          </div>
+          <div id="mod-grid" class="grid" aria-live="polite"></div>
         </div>
 
         <!-- TAB: TikTok -->
@@ -301,6 +310,7 @@
         </div>
         <div class="actions">
           <button class="btn" id="to-my-photos">Мои фото</button>
+          <button class="b
           <button class="btn danger" id="logout">Выйти</button>
         </div>
       </div>
@@ -346,7 +356,7 @@
            signOut, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
   import { getFirestore, collection, addDoc, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, 
            serverTimestamp, query, orderBy, where, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-  import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js';
+  import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js';
 
   // ---- ТВОЯ КОНФИГУРАЦИЯ (ЗАМЕНИ НА СВОЮ) ----
   const firebaseConfig = {
@@ -819,10 +829,3 @@
         // 'UID_СЮДА'
       ]; }
 
-      match /users/{uid} {
-        allow read: if isSignedIn();
-        allow write: if isOwner(uid);
-      }
-
-      match /photos/{photoId} {
-        allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
