@@ -290,7 +290,11 @@
             <div id="prof-email" class="rules"></div>
           </div>
         </div>
-        $1
+        <div class="field">
+          <label for="prof-avatar-file">Сменить аватар</label>
+          <input id="prof-avatar-file" class="file" type="file" accept="image/*" />
+          <div class="hint">JPG/PNG до 5 МБ. Совет: квадратная картинка 512×512.</div>
+        </div>
         <div class="actions hidden" id="prof-publish-actions">
           <button class="btn" id="prof-cancel-draft">Отменить</button>
           <button class="btn primary" id="prof-publish">Опубликовать профиль</button>
@@ -497,6 +501,11 @@
   // Авторизация модалка
   function openAuth(){ openModal(authModal); }
   openLoginBtn?.addEventListener('click', openAuth);
+  // Делегирование клика на случай, если кнопка переотрисована динамически
+  document.addEventListener('click', (e)=>{
+    const t = e.target && e.target.closest ? e.target.closest('#open-login') : null;
+    if (t) { e.preventDefault(); openAuth(); }
+  });
   authClose.addEventListener('click', ()=> closeModal(authModal));
   tabLogin.addEventListener('click', () => { tabLogin.classList.add('active'); tabRegister.classList.remove('active'); loginForm.classList.remove('hidden'); registerForm.classList.add('hidden'); });
   tabRegister.addEventListener('click', () => { tabRegister.classList.add('active'); tabLogin.classList.remove('active'); registerForm.classList.remove('hidden'); loginForm.classList.add('hidden'); });
@@ -600,7 +609,7 @@
     profEmail.textContent = currentUser.email || '';
   }
   // превью + отложенная публикация аватара
-  profAvatarFile.addEventListener('change', (e)=>{
+  profAvatarFile && profAvatarFile.addEventListener('change', (e)=>{
     const f = e.target.files?.[0];
     if (!f || !currentUser) return;
     if (f.size > 5*1024*1024) { alert('Слишком большой файл (>5 МБ)'); return; }
@@ -619,17 +628,6 @@
       await uploadBytes(r, pendingAvatarFile);
       const url = await getDownloadURL(r);
       await updateProfile(currentUser, { photoURL: url });
-      await updateDoc(doc(db,'users', currentUser.uid), { photoURL: url });
-      const mini = $('#mini-avatar'); if (mini) mini.src = url;
-      if (pendingAvatarPreviewURL) { URL.revokeObjectURL(pendingAvatarPreviewURL); pendingAvatarPreviewURL=null; }
-      pendingAvatarFile = null;
-      profPublishActions?.classList.add('hidden');
-      renderProfile();
-      alert('Профиль опубликован!');
-    }catch(err){
-      alert('Не удалось опубликовать профиль: '+(err?.message||err));
-    }
-  });
   
   // Отменить черновик
   profCancelDraft?.addEventListener('click', ()=>{
@@ -828,43 +826,3 @@
 
       match /photos/{photoId} {
         allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
-        allow read: if resource.data.approved == true || isOwner(resource.data.ownerUid) || isAdmin();
-        // Владелец может удалять только своё фото
-        allow delete: if isOwner(resource.data.ownerUid) || isAdmin();
-        // Админ может подтверждать модерацию
-        allow update: if isAdmin();
-
-        // Подколлекции
-        match /comments/{cid} {
-          allow read: if exists(/databases/$(database)/documents/photos/$(photoId)) &&
-                         (get(/databases/$(database)/documents/photos/$(photoId)).data.approved == true || isOwner(get(/databases/$(database)/documents/photos/$(photoId)).data.ownerUid) || isAdmin());
-          allow create: if isSignedIn() && request.resource.data.authorUid == request.auth.uid;
-          allow delete: if isAdmin() || (isSignedIn() && request.auth.uid == resource.data.authorUid);
-          allow update: if false; // не редактируем
-        }
-        match /likes/{uid} {
-          allow read: if true; // лайки видны всем
-          allow create, update, delete: if isSignedIn() && request.auth.uid == uid;
-        }
-      }
-    }
-  }
-
-  // Storage rules (пример):
-  rules_version = '2';
-  service firebase.storage {
-    match /b/{bucket}/o {
-      function isSignedIn() { return request.auth != null; }
-      match /avatars/{uid}.jpg {
-        allow read: if true;
-        allow write: if isSignedIn() && request.auth.uid == uid;
-      }
-      match /photos/{uid}/{allPaths=**} {
-        allow read: if true; // сами файлы можно читать
-        allow write: if isSignedIn() && request.auth.uid == uid;
-      }
-    }
-  }
-  -->
-</body>
-</html>
