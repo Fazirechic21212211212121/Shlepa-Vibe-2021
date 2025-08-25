@@ -105,6 +105,42 @@
   .profile-avatar{width:64px; height:64px; border-radius:50%; border:1px solid var(--stroke); object-fit:cover}
 
   .hidden{display:none !important}
+
+    /* === Комментарии: фикс высот и скролл === */
+#photo-modal .sheet-body{              /* контейнер всей секции внутри модалки */
+  height: min(70vh, 720px);
+  min-height: 0;
+}
+
+.photo-view{                           /* левая картинка + правая колонка */
+  display: grid;
+  grid-template-columns: 1.2fr .8fr;
+  gap: 14px;
+  height: 100%;
+  min-height: 0;                       /* ВАЖНО: разрешаем детям сжиматься */
+}
+
+.photo-side{                           /* правая колонка с метой/лайком/комментами */
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;                       /* ВАЖНО */
+}
+
+#pv-comments{                          /* сами комментарии */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;                    /* скролл! */
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  background: rgba(0,0,0,.2);
+  padding: 8px;
+}
+
+/* (необязательно) чуть красивее полоса прокрутки */
+#pv-comments::-webkit-scrollbar{width:8px}
+#pv-comments::-webkit-scrollbar-thumb{background:rgba(255,255,255,.25);border-radius:8px}
+
   </style>
 </head>
 <body>
