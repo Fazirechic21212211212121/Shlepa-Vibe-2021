@@ -265,6 +265,22 @@
 .kmenu .item:hover{ background:rgba(255,255,255,.08); }
 
 
+/* --- Модерация: карточки побольше + не резать превью --- */
+#tab-mod .grid{ grid-template-columns: repeat(auto-fill, minmax(260px,1fr)); }
+#tab-mod .card img{ height:190px; object-fit:contain; background:rgba(0,0,0,.25); }
+#tab-mod .card .meta{ min-height:120px; } /* чтобы кнопки не налипали на текст */
+
+/* --- Вложенные ответы в комментариях --- */
+.comment-children{
+  margin-left:14px; padding-left:10px;
+  border-left:1px dashed rgba(255,255,255,.25);
+}
+.reply-form{ display:flex; gap:8px; margin-top:6px; }
+.reply-form .input{ flex:1; }
+.reply-btn{ margin-top:6px; }
+
+
+
 
   </style>
 </head>
