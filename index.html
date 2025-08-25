@@ -1,1 +1,608 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Вайб 2021 — Promo15</title>
+  <meta name="description" content="Вайб 2021: приветствие, таймер, логин/регистрация, профиль и «Библиолетка» — галерея фото с модерацией, лайками и комментариями." />
 
+  <!-- Uploadcare (Storage без сервера) -->
+  <script src="https://ucarecdn.com/libs/widget/3.x/uploadcare.full.min.js"
+          data-public-key="7f7623a14608e95449ee"
+          data-multiple="false"
+          data-images-only="true"
+          data-max-file-size="8388608"></script>
+
+  <style>
+  :root{ --bgImage: url('https://i.ibb.co/C30Q1x8C/photo-2025-08-21-20-05-42.jpg'); --ink:#e9edf1; --muted:#a7b0c0; --stroke:rgba(255,255,255,.10); --bgBrightness:1.25; --bgSaturate:1.1; --accent:#7aa2ff; --danger:#ff6b6b; }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{ margin:0; color:var(--ink); font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,"Noto Sans",sans-serif; line-height:1.6; min-height:100dvh; }
+  body::before{content:""; position:fixed; inset:0; background-image:var(--bgImage); background-position:center; background-repeat:no-repeat; background-size:cover; filter:brightness(var(--bgBrightness)) saturate(var(--bgSaturate)); z-index:-2}
+  body::after{content:""; position:fixed; inset:0; background: radial-gradient(1200px 800px at 10% -20%, rgba(27,30,54,.35), rgba(15,18,33,.70)); z-index:-1}
+  .wrap{max-width:1100px; margin:auto; padding:28px 18px 42px}
+  header{padding:22px; background:rgba(255,255,255,.06); border:1px solid var(--stroke); border-radius:18px; backdrop-filter:blur(8px)}
+  h1{margin:0 0 8px; font-size:clamp(28px,5vw,44px)}
+  .greeting{white-space:pre-line; margin:0}
+  .counter{display:flex; flex-wrap:wrap; gap:12px; margin-top:14px}
+  .pill{padding:10px 14px; border-radius:999px; background:rgba(13,19,40,.85); border:1px solid var(--stroke)}
+
+  .topbar{display:flex; align-items:center; gap:10px; justify-content:space-between; margin-bottom:12px}
+  .tabs{display:flex; gap:8px; flex-wrap:wrap}
+  .tablink{display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:999px; border:1px solid rgba(255,255,255,.14); background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)); color:var(--ink); font-weight:700; cursor:pointer}
+  .tablink:hover{box-shadow:0 6px 16px rgba(0,0,0,.35)}
+  .authbox{display:flex; align-items:center; gap:10px}
+  .avatar{width:34px; height:34px; border-radius:50%; border:1px solid var(--stroke); object-fit:cover}
+
+  .links{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-top:18px}
+  .btn{display:inline-flex; align-items:center; justify-content:center; gap:10px; padding:14px 18px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)); color:var(--ink); font-weight:700; letter-spacing:.2px; cursor:pointer; transition:transform .15s, box-shadow .15s}
+  .btn:hover{transform:translateY(-1px); box-shadow:0 8px 22px rgba(0,0,0,.35)}
+  .btn.primary{border-color:rgba(122,162,255,.45); box-shadow: inset 0 0 0 1px rgba(122,162,255,.45)}
+  .btn.danger{border-color:rgba(255,107,107,.45); box-shadow: inset 0 0 0 1px rgba(255,107,107,.45)}
+  .rules{font-size:14px; color:var(--muted)}
+  footer{margin-top:28px; text-align:center; color:var(--muted); font-size:14px}
+
+  /* Оверлей/панель */
+  .overlay{position:fixed; inset:0; display:none; z-index:9999; background:rgba(5,8,20,.85); backdrop-filter:blur(6px)}
+  .overlay.open{display:grid; place-items:center}
+  .panel{width:min(1100px,96vw); height:min(85vh,900px); background:rgba(255,255,255,.06); border:1px solid var(--stroke); border-radius:18px; overflow:hidden; display:grid; grid-template-rows:auto 1fr}
+  .panel-header{display:flex; align-items:center; gap:10px; padding:10px 12px; border-bottom:1px solid var(--stroke); background:rgba(13,19,40,.9)}
+  .back-btn{display:inline-flex; align-items:center; justify-content:center; padding:8px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.14); background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)); color:var(--ink); font-weight:700}
+  .panel-tabs{margin-left:auto; display:flex; gap:8px}
+  .panel-tab{padding:8px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.14); background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)); cursor:pointer; font-weight:700}
+  .panel-tab.active{outline:2px solid rgba(122,162,255,.55)}
+  .panel-body{position:relative}
+  .tab{position:absolute; inset:0; overflow:auto; padding:14px; display:none}
+  .tab.active{display:block}
+
+  /* Галерея */
+  .grid{display:grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap:12px}
+  .card{border:1px solid var(--stroke); border-radius:14px; overflow:hidden; background:rgba(0,0,0,.25)}
+  .card img{width:100%; height:160px; object-fit:cover; display:block}
+  .card .meta{padding:8px 10px; display:flex; align-items:center; justify-content:space-between; gap:8px}
+  .badge{display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px; border:1px solid rgba(255,255,255,.14); font-size:12px}
+  .badge.pending{border-color:rgba(255,193,7,.45)}
+
+  /* Модалки */
+  .modal{position:fixed; inset:0; display:none; background:rgba(5,8,20,.85); z-index:10000; place-items:center; backdrop-filter: blur(6px)}
+  .modal.open{display:grid}
+  .sheet{width:min(520px,95vw); background:rgba(255,255,255,.06); border:1px solid var(--stroke); border-radius:18px; overflow:hidden}
+  .sheet-header{display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid var(--stroke); background:rgba(13,19,40,.9)}
+  .sheet-title{font-weight:800}
+  .sheet-body{padding:14px; display:grid; gap:10px}
+  .field{display:grid; gap:6px}
+  .input,.file{width:100%; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.18); background:rgba(0,0,0,.25); color:var(--ink)}
+  .actions{display:flex; gap:8px; justify-content:flex-end}
+  .hidden{display:none!important}
+  .profile-row{display:flex; align-items:center; gap:12px}
+  .profile-avatar{width:64px; height:64px; border-radius:50%; border:1px solid var(--stroke); object-fit:cover}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="topbar">
+        <div class="tabs" aria-label="Навигация">
+          <button class="tablink" id="open-gallery" type="button">Библиолетка</button>
+          <button class="tablink" id="open-tiktok" type="button">Библиолетка TikTok</button>
+        </div>
+        <div class="authbox" id="authbox">
+          <button class="btn" id="open-login">Войти / Регистрация</button>
+        </div>
+      </div>
+
+      <h1>Вайб 2021</h1>
+      <p class="greeting">Всем привет ребята! … с 01.01.2021 прошло <strong><span id="days-inline">0</span></strong> дней. Сейчас <strong><span id="current-year"></span></strong> год.</p>
+      <div class="counter">
+        <div class="pill"><strong id="days-since">0</strong> дней с 01.01.2021</div>
+        <div class="pill">Сегодня: <span id="today"></span></div>
+      </div>
+    </header>
+
+    <section class="links" aria-label="Мои ссылки">
+      <a class="btn" href="https://www.youtube.com/@Promo15_Official" target="_blank" rel="noopener">Перейти на канал</a>
+      <a class="btn" href="https://www.tiktok.com/@richardbabayan0" target="_blank" rel="noopener">Перейти в TikTok</a>
+    </section>
+
+    <footer>© <span id="year"></span> Promo15_Official</footer>
+  </div>
+
+  <!-- Оверлей «Библиолетка» -->
+  <div class="overlay" id="library" aria-hidden="true">
+    <div class="panel" role="dialog" aria-modal="true" aria-labelledby="panel-title">
+      <div class="panel-header">
+        <button class="back-btn" id="panel-close" aria-label="Назад">← Назад</button>
+        <div class="panel-title" id="panel-title">Библиолетка</div>
+        <div class="panel-tabs">
+          <button class="panel-tab active" data-tab="gallery">Библиолетка</button>
+          <button class="panel-tab" data-tab="tiktok">Библиолетка TikTok</button>
+          <button class="panel-tab hidden" data-tab="mod" id="tab-mod-btn">Модерация</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div id="tab-gallery" class="tab active">
+          <div class="actions" style="justify-content:space-between;margin-bottom:12px">
+            <div class="rules">Категория «вайб зимы 2021». Все фото проверяются модератором.</div>
+            <button class="btn primary" id="add-photo">✚ Добавить фото</button>
+          </div>
+          <div id="gallery-grid" class="grid" aria-live="polite"></div>
+        </div>
+        <div id="tab-mod" class="tab">
+          <div class="rules" style="margin-bottom:12px">Только для админов.</div>
+          <div id="mod-grid" class="grid" aria-live="polite"></div>
+        </div>
+        <div id="tab-tiktok" class="tab">
+          <iframe id="tiktok-iframe" title="TikTok Search"
+                  loading="lazy"
+                  style="position:absolute; inset:0; width:100%; height:100%; border:0; background:rgba(0,0,0,.2)"
+                  referrerpolicy="no-referrer"
+                  sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>
+          <div id="tiktok-fallback" class="sheet-body" style="position:absolute; inset:0; display:none; place-items:center; text-align:center">
+            <div style="max-width:560px; margin:auto">
+              <h3>Открыть видео в TikTok</h3>
+              <p class="rules">Поиск TikTok не встраивается. Откройте его в новой вкладке.</p>
+              <a class="btn" href="https://www.tiktok.com/search?q=%D0%B2%D0%B0%D0%B9%D0%B1%202021%20%D0%B3%D0%BE%D0%B4" target="_blank" rel="noopener">Открыть поиск</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модалки -->
+  <div class="modal" id="upload-modal" aria-hidden="true">
+    <div class="sheet" role="dialog" aria-modal="true">
+      <div class="sheet-header"><div class="sheet-title">Загрузить фото</div><button class="back-btn" id="upload-close">← Назад</button></div>
+      <form class="sheet-body" id="upload-form">
+        <div class="rules"><strong>Внимание!</strong> Только картинки до 8 МБ. Всё на модерации.</div>
+        <div class="field"><label for="photo-title">Название</label><input id="photo-title" class="input" type="text" maxlength="80" required placeholder="Например: Снежный двор 2021"/></div>
+        <div class="field"><label for="photo-file">Фотография (JPG/PNG)</label><input id="photo-file" class="file" type="file" accept="image/*" required /></div>
+        <div class="actions"><button class="btn" type="button" id="upload-cancel">Отмена</button><button class="btn primary" type="submit">Выложить</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal" id="photo-modal" aria-hidden="true">
+    <div class="sheet" style="width:min(1100px,96vw)" role="dialog" aria-modal="true">
+      <div class="sheet-header"><div class="sheet-title" id="photo-title-h">Фото</div><button class="back-btn" id="photo-close">← Назад</button></div>
+      <div class="sheet-body" style="height:min(70vh,720px)">
+        <div style="display:grid; grid-template-columns:1.2fr .8fr; gap:14px; height:100%">
+          <img id="pv-img" alt="Просмотр фото" style="width:100%; height:100%; object-fit:contain; background:rgba(0,0,0,.2); border:1px solid var(--stroke); border-radius:12px"/>
+          <div style="display:flex; flex-direction:column; gap:10px">
+            <div id="pv-meta"></div>
+            <div class="actions">
+              <button class="btn" id="pv-like">❤ Лайк <span id="pv-like-count" class="badge">0</span></button>
+              <button class="btn danger hidden" id="pv-delete">Удалить фото</button>
+            </div>
+            <div id="pv-comments" class="sheet-body" style="flex:1; overflow:auto; border:1px solid var(--stroke); border-radius:12px; background:rgba(0,0,0,.2)"></div>
+            <form id="pv-comment-form" class="field">
+              <label for="pv-comment-input">Комментарий</label>
+              <input id="pv-comment-input" class="input" type="text" maxlength="300" placeholder="Напишите что-нибудь..." />
+              <div class="actions"><button class="btn primary" type="submit">Отправить</button></div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="auth-modal" aria-hidden="true">
+    <div class="sheet" role="dialog" aria-modal="true">
+      <div class="sheet-header"><div class="sheet-title" id="auth-title">Вход и регистрация</div><button class="back-btn" id="auth-close">← Назад</button></div>
+      <div class="sheet-body">
+        <div class="actions" style="justify-content:flex-start"><button class="btn active" id="tab-login">Вход</button><button class="btn" id="tab-register">Регистрация</button></div>
+        <form id="login-form" class="field">
+          <label for="login-email">Email</label><input id="login-email" class="input" type="email" autocomplete="email" required />
+          <label for="login-password">Пароль</label><input id="login-password" class="input" type="password" autocomplete="current-password" required />
+          <div class="actions"><button class="btn" type="button" id="google-login">Войти через Google</button><button class="btn primary" type="submit">Войти</button></div>
+        </form>
+        <form id="register-form" class="field hidden">
+          <label for="reg-display">Имя (отображается)</label><input id="reg-display" class="input" type="text" maxlength="40" placeholder="Ваш ник" />
+          <label for="reg-email">Email</label><input id="reg-email" class="input" type="email" autocomplete="email" required />
+          <label for="reg-password">Пароль</label><input id="reg-password" class="input" type="password" minlength="8" autocomplete="new-password" required />
+          <label for="reg-password2">Повтор пароля</label><input id="reg-password2" class="input" type="password" minlength="8" autocomplete="new-password" required />
+          <div class="actions"><button class="btn" type="button" id="google-register">Google</button><button class="btn primary" type="submit">Зарегистрироваться</button></div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="profile-modal" aria-hidden="true">
+    <div class="sheet" role="dialog" aria-modal="true">
+      <div class="sheet-header"><div class="sheet-title" id="profile-title">Мой профиль</div><button class="back-btn" id="profile-close">← Назад</button></div>
+      <div class="sheet-body">
+        <div class="profile-row">
+          <img id="prof-avatar" class="profile-avatar" alt="Аватар" />
+          <div><div id="prof-name" style="font-weight:800"></div><div id="prof-email" class="rules"></div></div>
+        </div>
+        <div class="field"><label for="prof-avatar-file">Сменить аватар</label><input id="prof-avatar-file" class="file" type="file" accept="image/*" /><div class="rules">JPG/PNG до 5 МБ. После выбора появится кнопка «Опубликовать профиль».</div></div>
+        <div class="actions hidden" id="prof-publish-actions"><button class="btn" id="prof-cancel-draft">Отменить</button><button class="btn primary" id="prof-publish">Опубликовать профиль</button></div>
+        <div class="actions"><button class="btn" id="to-my-photos">Мои фото</button><button class="btn hidden" id="open-moderation">Модерация</button><button class="btn danger" id="logout">Выйти</button></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // таймер и год
+  (function(){
+    function calc(){const s=Date.UTC(2021,0,1),n=new Date(),t=Date.UTC(n.getFullYear(),n.getMonth(),n.getDate());const d=Math.floor((t-s)/86400000);const set=(i,v)=>{const e=document.getElementById(i); if(e) e.textContent=v};set('days-since',d.toLocaleString('ru-RU'));set('days-inline',d.toLocaleString('ru-RU'));set('today',n.toLocaleDateString('ru-RU',{year:'numeric',month:'long',day:'numeric'}));set('current-year',n.getFullYear());set('year',n.getFullYear());}
+    calc(); setInterval(calc, 60000);
+  })();
+  </script>
+
+  <!-- ===== Firebase + логика ===== -->
+  <script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+  import { getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence,
+           signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile,
+           signOut, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+  import { getFirestore, collection, addDoc, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
+           serverTimestamp, query, orderBy, where, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+  // Firebase (новый проект shlepa-56015)
+  const firebaseConfig = {
+    apiKey: "AIzaSyCB-HVpTsUkvoJg6r3608eYU6vsjewECtA",
+    authDomain: "shlepa-56015.firebaseapp.com",
+    projectId: "shlepa-56015",
+    storageBucket: "shlepa-56015.firebasestorage.app",
+    messagingSenderId: "885165142953",
+    appId: "1:885165142953:web:3262d5b934b720af540ab8",
+    measurementId: "G-3D1W27T1SE"
+  };
+
+  const ADMIN_UIDS = ["YENSqygLKrQ4PMMbcEG4109jSST2"]; // замени на свой UID при необходимости
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app); setPersistence(auth, browserLocalPersistence);
+  const db = getFirestore(app);
+
+  const $ = s=>document.querySelector(s);
+  const $$ = s=>Array.from(document.querySelectorAll(s));
+  const fmtDate = ts => (ts?.toDate ? ts.toDate() : new Date(ts)).toLocaleString('ru-RU');
+  const isAdmin = uid => ADMIN_UIDS.includes(uid);
+
+  // refs
+  const authbox=$('#authbox'); const openLoginBtn=$('#open-login');
+  const library=$('#library'), openGalleryBtn=$('#open-gallery'), openTiktokBtn=$('#open-tiktok'), panelClose=$('#panel-close');
+  const panelTabs=$$('.panel-tab'), tabGallery=$('#tab-gallery'), tabTiktok=$('#tab-tiktok');
+  const tabMod=$('#tab-mod'), tabModBtn=$('#tab-mod-btn'), modGrid=$('#mod-grid');
+  const tiktokIframe=$('#tiktok-iframe'), tiktokFallback=$('#tiktok-fallback'), TIKTOK_URL='https://www.tiktok.com/search?q=%D0%B2%D0%B0%D0%B9%D0%B1%202021%20%D0%B3%D0%BE%D0%B4';
+
+  const addPhotoBtn=$('#add-photo'), galleryGrid=$('#gallery-grid');
+  const uploadModal=$('#upload-modal'), uploadClose=$('#upload-close'), uploadCancel=$('#upload-cancel'), uploadForm=$('#upload-form');
+  const photoTitleInput=$('#photo-title'), photoFileInput=$('#photo-file');
+
+  const photoModal=$('#photo-modal'), photoClose=$('#photo-close'), pvImg=$('#pv-img'), pvMeta=$('#pv-meta');
+  const pvLike=$('#pv-like'), pvLikeCount=$('#pv-like-count'), pvDelete=$('#pv-delete'), pvComments=$('#pv-comments');
+  const pvCommentForm=$('#pv-comment-form'), pvCommentInput=$('#pv-comment-input');
+
+  const authModal=$('#auth-modal'), authClose=$('#auth-close'), tabLogin=$('#tab-login'), tabRegister=$('#tab-register');
+  const loginForm=$('#login-form'), registerForm=$('#register-form'), googleLogin=$('#google-login'), googleRegister=$('#google-register');
+
+  const profileModal=$('#profile-modal'), profileClose=$('#profile-close');
+  const profAvatar=$('#prof-avatar'), profName=$('#prof-name'), profEmail=$('#prof-email');
+  const profAvatarFile=$('#prof-avatar-file'), profPublishActions=$('#prof-publish-actions'), profPublish=$('#prof-publish'), profCancelDraft=$('#prof-cancel-draft');
+  const toMyPhotos=$('#to-my-photos'), openModerationBtn=$('#open-moderation'), logoutBtn=$('#logout');
+
+  // state
+  let currentUser=null, unsubPhotos=null, unsubComments=null, unsubLikes=null, unsubModeration=null, openPhotoId=null;
+  let pendingAvatarFile=null, pendingAvatarPreviewURL=null;
+
+  // modals/tabs
+  const openModal = el => { el.classList.add('open'); el.setAttribute('aria-hidden','false'); };
+  const closeModal = el => { el.classList.remove('open'); el.setAttribute('aria-hidden','true'); };
+  const openTab = tab => {
+    panelTabs.forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+    tabGallery.classList.toggle('active', tab==='gallery');
+    tabTiktok.classList.toggle('active', tab==='tiktok');
+    tabMod?.classList.toggle('active', tab==='mod');
+  };
+  const ensureTikTok = ()=>{ tiktokFallback.style.display='none'; tiktokIframe.src=TIKTOK_URL; setTimeout(()=>tiktokFallback.style.display='grid', 2500); };
+
+  openGalleryBtn.addEventListener('click', ()=>{ openTab('gallery'); openModal(library); });
+  openTiktokBtn.addEventListener('click', ()=>{ openTab('tiktok'); openModal(library); ensureTikTok(); });
+  panelClose.addEventListener('click', ()=> closeModal(library));
+  panelTabs.forEach(btn=>btn.addEventListener('click', ()=>{
+    const tab = btn.dataset.tab; openTab(tab);
+    if (tab==='tiktok') ensureTikTok();
+    if (tab==='mod') listenModeration();
+  }));
+
+  // add photo
+  addPhotoBtn.addEventListener('click', ()=>{ if(!currentUser){openAuth();return;} photoTitleInput.value=''; photoFileInput.value=''; openModal(uploadModal); });
+  uploadClose.addEventListener('click', ()=>closeModal(uploadModal));
+  uploadCancel.addEventListener('click', ()=>closeModal(uploadModal));
+
+  // photo modal
+  photoClose.addEventListener('click', ()=>{
+    if (unsubComments) unsubComments(); if (unsubLikes) unsubLikes();
+    openPhotoId=null; pvImg.src=''; pvMeta.innerHTML=''; pvComments.innerHTML='';
+    closeModal(photoModal);
+  });
+
+  // auth modal
+  const openAuth = ()=> openModal(authModal);
+  openLoginBtn?.addEventListener('click', openAuth);
+  // на случай, если кнопка была перерисована
+  document.addEventListener('click', e=>{ if (e.target?.closest('#open-login')) { e.preventDefault(); openAuth(); } });
+  authClose.addEventListener('click', ()=> closeModal(authModal));
+  tabLogin.addEventListener('click', ()=>{ tabLogin.classList.add('active'); tabRegister.classList.remove('active'); loginForm.classList.remove('hidden'); registerForm.classList.add('hidden'); });
+  tabRegister.addEventListener('click', ()=>{ tabRegister.classList.add('active'); tabLogin.classList.remove('active'); registerForm.classList.remove('hidden'); loginForm.classList.add('hidden'); });
+
+  const provider = new GoogleAuthProvider();
+  googleLogin.addEventListener('click', async ()=>{ try{ await signInWithPopup(auth, provider); closeModal(authModal);}catch(e){alert('Ошибка Google: '+(e?.message||e));}});
+  googleRegister.addEventListener('click', async ()=>{ try{ await signInWithPopup(auth, provider); closeModal(authModal);}catch(e){alert('Ошибка Google: '+(e?.message||e));}});
+
+  loginForm.addEventListener('submit', async e=>{
+    e.preventDefault();
+    try{ await signInWithEmailAndPassword(auth, $('#login-email').value.trim(), $('#login-password').value); closeModal(authModal); }
+    catch(err){ alert('Вход не выполнен: '+(err?.code||err?.message||err)); }
+  });
+
+  registerForm.addEventListener('submit', async e=>{
+    e.preventDefault();
+    const email=$('#reg-email').value.trim(), p1=$('#reg-password').value, p2=$('#reg-password2').value, display=$('#reg-display').value.trim();
+    if(p1!==p2){ alert('Пароли не совпадают'); return; }
+    try{
+      const cred=await createUserWithEmailAndPassword(auth,email,p1);
+      const name = display || email.split('@')[0];
+      await updateProfile(cred.user,{displayName:name});
+      await setDoc(doc(db,'users',cred.user.uid),{displayName:name,email:cred.user.email||'',photoURL:cred.user.photoURL||'',createdAt:serverTimestamp()});
+      closeModal(authModal);
+    }catch(err){ alert('Регистрация не выполнена: '+(err?.code||err?.message||err)); }
+  });
+
+  // auth state
+  onAuthStateChanged(auth, async (user)=>{
+    currentUser=user;
+    const drawLoggedIn = u=>{
+      authbox.innerHTML='';
+      const btn=document.createElement('button'); btn.className='btn'; btn.id='open-profile'; btn.innerHTML=`<img id="mini-avatar" class="avatar" alt="Аватар" src="${u.photoURL||'https://i.pravatar.cc/64?u='+u.uid}"> Профиль`;
+      btn.addEventListener('click', openProfile);
+      authbox.appendChild(btn);
+    };
+    const drawLoggedOut = ()=>{
+      authbox.innerHTML=''; const b=document.createElement('button'); b.className='btn'; b.id='open-login'; b.textContent='Войти / Регистрация'; b.addEventListener('click', openAuth); authbox.appendChild(b);
+    };
+    if(user){
+      drawLoggedIn(user);
+      if(isAdmin(user.uid)){ tabModBtn?.classList.remove('hidden'); openModerationBtn?.classList.remove('hidden'); } else { tabModBtn?.classList.add('hidden'); openModerationBtn?.classList.add('hidden'); }
+      try{
+        const ref=doc(db,'users',user.uid), udoc=await getDoc(ref);
+        if(!udoc.exists()) await setDoc(ref,{displayName:user.displayName||'',email:user.email||'',photoURL:user.photoURL||'',createdAt:serverTimestamp()});
+      }catch(e){ console.warn('user doc error', e); }
+    } else { drawLoggedOut(); tabModBtn?.classList.add('hidden'); openModerationBtn?.classList.add('hidden'); }
+  });
+
+  // profile
+  function openProfile(){ if(!currentUser) return; openModal(profileModal); renderProfile(); }
+  profileClose.addEventListener('click', ()=> closeModal(profileModal));
+  logoutBtn.addEventListener('click', async ()=>{ await signOut(auth); closeModal(profileModal); });
+  function renderProfile(){
+    profAvatar.src = currentUser.photoURL || 'https://i.pravatar.cc/128?u='+currentUser.uid;
+    profName.textContent = currentUser.displayName || '(без имени)';
+    profEmail.textContent = currentUser.email || '';
+  }
+  profAvatarFile.addEventListener('change', e=>{
+    const f=e.target.files?.[0]; if(!f||!currentUser) return;
+    if (f.size>5*1024*1024){ alert('Слишком большой файл (>5 МБ)'); return; }
+    pendingAvatarFile=f;
+    if(pendingAvatarPreviewURL) URL.revokeObjectURL(pendingAvatarPreviewURL);
+    pendingAvatarPreviewURL = URL.createObjectURL(f);
+    profAvatar.src = pendingAvatarPreviewURL;
+    profPublishActions.classList.remove('hidden');
+  });
+  profCancelDraft.addEventListener('click', ()=>{
+    pendingAvatarFile=null; if(pendingAvatarPreviewURL){URL.revokeObjectURL(pendingAvatarPreviewURL); pendingAvatarPreviewURL=null;}
+    profPublishActions.classList.add('hidden'); renderProfile();
+  });
+  // опубликовать аватар (Uploadcare)
+  profPublish.addEventListener('click', async ()=>{
+    if(!currentUser || !pendingAvatarFile) return;
+    try{
+      const ucFile = await uploadcare.fileFrom('object', pendingAvatarFile);
+      const info = await ucFile.done();
+      const url = info.cdnUrl;
+      await updateProfile(currentUser,{ photoURL:url });
+      await updateDoc(doc(db,'users',currentUser.uid),{ photoURL:url });
+      const mini=$('#mini-avatar'); if(mini) mini.src=url;
+      if(pendingAvatarPreviewURL){URL.revokeObjectURL(pendingAvatarPreviewURL); pendingAvatarPreviewURL=null;}
+      pendingAvatarFile=null; profPublishActions.classList.add('hidden'); renderProfile();
+      alert('Профиль опубликован!'); setTimeout(()=>location.reload(), 400);
+    }catch(err){ alert('Ошибка публикации: '+(err?.code||err?.message||err)); }
+  });
+
+  // upload photo (Uploadcare)
+  uploadForm.addEventListener('submit', async e=>{
+    e.preventDefault();
+    if(!currentUser){ openAuth(); return; }
+    const title=photoTitleInput.value.trim(); const file=photoFileInput.files?.[0];
+    if(!file){ alert('Прикрепите фото'); return; }
+    if(!/^image\//.test(file.type)){ alert('Только изображения'); return; }
+    if(file.size>8*1024*1024){ alert('Файл > 8 МБ'); return; }
+    try{
+      const ucFile = await uploadcare.fileFrom('object', file);
+      const info = await ucFile.done();
+      const url = info.cdnUrl;
+      await addDoc(collection(db,'photos'),{
+        title, imageURL:url, storagePath:`uploadcare:${info.uuid}`,
+        ownerUid:currentUser.uid, ownerName:currentUser.displayName||'Без имени', ownerPhoto:currentUser.photoURL||'',
+        createdAt:serverTimestamp(), approved:false
+      });
+      closeModal(uploadModal); openTab('gallery'); openModal(library); listenGallery(true);
+      alert('Фото отправлено на модерацию!');
+    }catch(err){ alert('Загрузка не удалась: '+(err?.code||err?.message||err)); }
+  });
+
+  // gallery
+  function listenGallery(myOnly=false){
+    if(unsubPhotos) unsubPhotos();
+    galleryGrid.innerHTML='<div class="rules">Загрузка…</div>';
+    let qref;
+    if(myOnly && currentUser){
+      qref=query(collection(db,'photos'), where('ownerUid','==',currentUser.uid), orderBy('createdAt','desc'));
+    }else{
+      qref=query(collection(db,'photos'), where('approved','==',true), orderBy('createdAt','desc'));
+    }
+    unsubPhotos = onSnapshot(qref, snap=>{
+      galleryGrid.innerHTML=''; if(snap.empty){ galleryGrid.innerHTML='<div class="rules">Пока пусто.</div>'; return; }
+      snap.forEach(dref=>{
+        const d=dref.data();
+        const card=document.createElement('div'); card.className='card'; card.dataset.id=dref.id;
+        const img=document.createElement('img'); img.src=d.imageURL; img.alt=d.title||'Фото';
+        const meta=document.createElement('div'); meta.className='meta';
+        const left=document.createElement('div'); left.innerHTML=`<strong>${d.title||'Без названия'}</strong><br><span class="rules">${d.ownerName||''}</span>`;
+        const right=document.createElement('div');
+        if(d.approved!==true){ const b=document.createElement('span'); b.className='badge pending'; b.textContent='На модерации'; right.appendChild(b); }
+        meta.appendChild(left); meta.appendChild(right);
+        card.appendChild(img); card.appendChild(meta);
+        card.addEventListener('click', ()=> openPhoto(dref.id, d));
+        galleryGrid.appendChild(card);
+      });
+    }, err=>{ console.error(err); galleryGrid.innerHTML='<div class="rules">Ошибка загрузки.</div>'; });
+  }
+  listenGallery(false);
+  toMyPhotos.addEventListener('click', ()=>{ closeModal(profileModal); openTab('gallery'); openModal(library); listenGallery(true); });
+
+  // open one photo
+  async function openPhoto(id, data){
+    openPhotoId=id;
+    pvImg.src=data.imageURL; $('#photo-title-h').textContent=data.title||'Фото';
+    pvMeta.innerHTML = `<div><strong>${data.title||'Без названия'}</strong></div>
+                        <div class="rules">Автор: ${data.ownerName||'Неизвестно'}</div>
+                        <div class="rules">Создано: ${data.createdAt?fmtDate(data.createdAt):'…'}</div>`;
+    pvDelete.classList.toggle('hidden', !currentUser || currentUser.uid!==data.ownerUid);
+
+    // likes
+    if(unsubLikes) unsubLikes();
+    const likesCol=collection(db,'photos',id,'likes');
+    unsubLikes=onSnapshot(likesCol, snap=>{ pvLikeCount.textContent=snap.size; });
+    pvLike.onclick = async ()=>{
+      if(!currentUser){ openAuth(); return; }
+      const likeRef=doc(db,'photos',id,'likes', currentUser.uid);
+      const got=await getDoc(likeRef);
+      if(got.exists()) await deleteDoc(likeRef); else await setDoc(likeRef,{uid:currentUser.uid,at:serverTimestamp()});
+    };
+
+    // comments
+    if(unsubComments) unsubComments();
+    const commCol=collection(db,'photos',id,'comments');
+    unsubComments=onSnapshot(query(commCol, orderBy('at','asc')), snap=>{
+      pvComments.innerHTML=''; if(snap.empty){ pvComments.innerHTML='<div class="rules">Комментариев пока нет.</div>'; return; }
+      snap.forEach(c=>{
+        const cd=c.data(); const el=document.createElement('div'); el.style.borderBottom='1px dashed rgba(255,255,255,.15)'; el.style.padding='6px 0';
+        el.innerHTML=`<div><strong>${cd.authorName||'Аноним'}</strong> <span class="rules">${fmtDate(cd.at)}</span></div><div>${cd.text||''}</div>`;
+        pvComments.appendChild(el);
+      });
+    });
+    pvCommentForm.onsubmit = async e=>{
+      e.preventDefault(); if(!currentUser){ openAuth(); return; }
+      const text=pvCommentInput.value.trim(); if(!text) return;
+      try{ await addDoc(collection(db,'photos',id,'comments'),{ text, authorUid:currentUser.uid, authorName:currentUser.displayName||'Без имени', at:serverTimestamp()}); pvCommentInput.value=''; }
+      catch(err){ alert('Не удалось отправить: '+(err?.code||err?.message||err)); }
+    };
+
+    // delete (только БД; файл в Uploadcare с клиента не удаляем)
+    pvDelete.onclick = async ()=>{
+      if(!currentUser || currentUser.uid!==data.ownerUid) return;
+      if(!confirm('Удалить это фото?')) return;
+      try{
+        const likesQ=await getDocs(collection(db,'photos',id,'likes')); for(const d of likesQ.docs) await deleteDoc(d.ref);
+        const commQ=await getDocs(collection(db,'photos',id,'comments')); for(const d of commQ.docs) await deleteDoc(d.ref);
+        await deleteDoc(doc(db,'photos',id));
+        alert('Фото удалено'); photoClose.click();
+      }catch(err){ alert('Не удалось удалить: '+(err?.code||err?.message||err)); }
+    };
+
+    openModal(photoModal);
+  }
+
+  // moderation
+  function listenModeration(){
+    if(!currentUser || !isAdmin(currentUser.uid)){ modGrid.innerHTML='<div class="rules">Нет доступа.</div>'; return; }
+    if(unsubModeration) unsubModeration();
+    modGrid.innerHTML='<div class="rules">Загрузка…</div>';
+    const qMod=query(collection(db,'photos'), where('approved','==',false), orderBy('createdAt','desc'));
+    unsubModeration=onSnapshot(qMod, snap=>{
+      modGrid.innerHTML=''; if(snap.empty){ modGrid.innerHTML='<div class="rules">Очередь пустая.</div>'; return; }
+      snap.forEach(docu=>{
+        const d=docu.data();
+        const card=document.createElement('div'); card.className='card';
+        const img=document.createElement('img'); img.src=d.imageURL; img.alt=d.title||'Фото';
+        const meta=document.createElement('div'); meta.className='meta';
+        const left=document.createElement('div'); left.innerHTML=`<strong>${d.title||'Без названия'}</strong><br><span class="rules">Автор: ${d.ownerName||''}</span>`;
+        const right=document.createElement('div');
+        const approve=document.createElement('button'); approve.className='btn primary'; approve.textContent='Разрешить';
+        const reject=document.createElement('button'); reject.className='btn danger'; reject.textContent='Запретить';
+        right.appendChild(approve); right.appendChild(reject);
+        meta.appendChild(left); meta.appendChild(right);
+        card.appendChild(img); card.appendChild(meta);
+        modGrid.appendChild(card);
+
+        approve.addEventListener('click', async ()=>{ try{ await updateDoc(doc(db,'photos',docu.id),{approved:true,approvedAt:serverTimestamp(),approvedBy:currentUser.uid}); }catch(err){ alert('Не удалось одобрить: '+(err?.code||err?.message||err)); }});
+        reject.addEventListener('click', async ()=>{
+          if(!confirm('Отклонить и удалить фото?')) return;
+          try{
+            const likesQ=await getDocs(collection(db,'photos',docu.id,'likes')); for(const d2 of likesQ.docs) await deleteDoc(d2.ref);
+            const commQ=await getDocs(collection(db,'photos',docu.id,'comments')); for(const d3 of commQ.docs) await deleteDoc(d3.ref);
+            await deleteDoc(doc(db,'photos',docu.id));
+          }catch(err){ alert('Не удалось удалить: '+(err?.code||err?.message||err)); }
+        });
+      });
+    }, err=>{ modGrid.innerHTML='<div class="rules">Ошибка загрузки очереди.</div>'; console.error(err); });
+  }
+  openModerationBtn.addEventListener('click', ()=>{ closeModal(profileModal); openTab('mod'); openModal(library); listenModeration(); });
+
+  // esc / click outside
+  window.addEventListener('keydown', e=>{
+    if(e.key==='Escape'){ [library, uploadModal, photoModal, authModal, profileModal].forEach(m=>m.classList.contains('open') && closeModal(m)); }
+  });
+  [library, uploadModal, photoModal, authModal, profileModal].forEach(mod=>mod.addEventListener('click', e=>{ if(e.target===mod) closeModal(mod); }));
+
+  // стартовая лента
+  listenGallery(false);
+  </script>
+
+  <!--
+  Что включить в Firebase Console:
+  1) Authentication: Email/Password + Google.
+  2) Firestore: создастся база. Нужны индексы:
+     - photos: approved Asc + createdAt Desc
+     - photos: ownerUid Asc + createdAt Desc
+  3) Правила Firestore (пример, адаптируй под себя):
+     rules_version = '2';
+     service cloud.firestore {
+       match /databases/{database}/documents {
+         function signedIn() { return request.auth != null; }
+         function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+         function isAdmin() { return signedIn() && request.auth.uid in [
+           // 'YENSqygLKrQ4PMMbcEG4109jSST2'
+         ]; }
+
+         match /users/{uid} {
+           allow read: if signedIn();
+           allow write: if isOwner(uid);
+         }
+
+         match /photos/{id} {
+           allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+           allow read: if resource.data.approved == true || isOwner(resource.data.ownerUid) || isAdmin();
+           allow delete: if isOwner(resource.data.ownerUid) || isAdmin();
+           allow update: if isAdmin();
+           match /comments/{cid} {
+             allow read: if true;
+             allow create: if signedIn() && request.resource.data.authorUid == request.auth.uid;
+             allow delete: if isAdmin() || (signedIn() && request.auth.uid == resource.data.authorUid);
+             allow update: if false;
+           }
+           match /likes/{uid} {
+             allow read: if true;
+             allow create, update, delete: if signedIn() && request.auth.uid == uid;
+           }
+         }
+       }
+     }
+  Примечание: файлы лежат в Uploadcare, удаление с клиента не выполняем (для этого нужен серверный секретный ключ).
+  -->
+</body>
+</html>
