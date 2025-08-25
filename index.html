@@ -342,18 +342,40 @@
     </div>
   </div>
 
-  <!-- Модалка: загрузка фото -->
-  <div class="modal" id="upload-modal" aria-hidden="true">
-    <div class="sheet" role="dialog" aria-modal="true">
-      <div class="sheet-header"><div class="sheet-title">Загрузить фото</div><button class="back-btn" id="upload-close">← Назад</button></div>
-      <form class="sheet-body" id="upload-form">
-        <div class="rules"><strong>Внимание!</strong> Только картинки до 8 МБ. Всё на модерации.</div>
-        <div class="field"><label for="photo-title">Название</label><input id="photo-title" class="input" type="text" maxlength="80" required placeholder="Например: Снежный двор 2021"/></div>
-        <div class="field"><label for="photo-file">Фотография (JPG/PNG)</label><input id="photo-file" class="file" type="file" accept="image/*" required /></div>
-        <div class="actions"><button class="btn" type="button" id="upload-cancel">Отмена</button><button class="btn primary" type="submit">Выложить</button></div>
-      </form>
+<!-- Модалка: загрузка фото -->
+<div class="modal" id="upload-modal" aria-hidden="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="upload-title">
+    <div class="sheet-header">
+      <div class="sheet-title" id="upload-title">Загрузить фото</div>
+      <button class="back-btn" id="upload-close">← Назад</button>
     </div>
+
+    <form class="sheet-body" id="upload-form">
+      <div class="rules">
+        <strong>Внимание!</strong> Только картинки до 8 МБ. Всё на модерации.
+      </div>
+
+      <div class="field">
+        <label for="photo-title">Название</label>
+        <input id="photo-title" class="input" type="text" maxlength="80"
+               required placeholder="Например: Снежный двор 2021" />
+      </div>
+
+      <div class="field">
+        <label for="photo-file">Фотография (JPG/PNG)</label>
+        <input id="photo-file" class="file" type="file" accept="image/*" required />
+        <!-- Превью выбранного файла -->
+        <img id="upload-preview" class="upload-preview" alt="Превью выбранного фото" />
+      </div>
+
+      <div class="actions">
+        <button class="btn" type="button" id="upload-cancel">Отмена</button>
+        <button class="btn primary" type="submit">Выложить</button>
+      </div>
+    </form>
   </div>
+</div>
+
 
   <!-- Модалка: просмотр фото -->
   <div class="modal" id="photo-modal" aria-hidden="true">
