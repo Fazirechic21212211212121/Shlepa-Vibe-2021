@@ -78,6 +78,20 @@
   /* фикс, чтобы форма комментария не уезжала вниз */
   #pv-comments{flex:1; overflow:auto; min-height:0;}
   #pv-comment-form{border-top:1px solid var(--stroke); background:rgba(0,0,0,.15); padding-top:10px;}
+
+    /* === SCROLL FIX (правая колонка и комментарии) === */
+.photo-view { min-height: 0; }
+.photo-side { min-height: 0; }
+#pv-comments { min-height: 0; overflow: auto; }
+
+/* Лоадер внутри сетки галереи */
+.gallery-loader{
+  grid-column: 1 / -1;
+  text-align:center;
+  padding:16px 0;
+  color:var(--muted);
+}
+
   </style>
 </head>
 <body>
