@@ -56,7 +56,7 @@
   .tab.active{display:block}
 
   .grid{display:grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap:12px}
-  .card{border:1px solid var(--stroke); border-radius:14px; overflow:hidden; background:rgba(0,0,0,.25)}
+  .card{border:1px solid var(--stroke); border-radius:14px; overflow:hidden; background:rgba(0,0,0,.25); cursor:pointer}
   .card img{width:100%; height:160px; object-fit:cover; display:block}
   .card .meta{padding:8px 10px; display:flex; align-items:center; justify-content:space-between; gap:8px}
   .badge{display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px; border:1px solid rgba(255,255,255,.14); font-size:12px}
@@ -258,7 +258,7 @@
            signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile,
            signOut, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
   import { getFirestore, collection, addDoc, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
-           serverTimestamp, query, orderBy, where, onSnapshot, limit } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+           serverTimestamp, query, where, onSnapshot, limit, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
   /* Firebase (Auth + Firestore) */
   const firebaseConfig = {
@@ -276,15 +276,16 @@
   const auth = getAuth(app); setPersistence(auth, browserLocalPersistence);
   const db = getFirestore(app);
 
-  /* Uploadcare helper */
+  /* ===== Uploadcare helper (устойчивый + таймаут) ===== */
   const UC_PUBLIC_KEY = '7f7623a14608e95449ee';
-  function uploadcareUpload(file){
-    return new Promise((resolve,reject)=>{
-      try{
-        const ucFile = uploadcare.fileFrom('object', file, { publicKey: UC_PUBLIC_KEY, store: 'auto' });
-        ucFile.progress(()=>{}).done(info=>resolve(info)).fail(err=>reject(err));
-      }catch(e){ reject(e); }
-    });
+  function timeout(ms, label='Операция'){ return new Promise((_,rej)=>setTimeout(()=>rej(new Error(label+' timeout')),ms)); }
+  async function ucUpload(file){
+    const info = await Promise.race([
+      uploadcare.fileFrom('object', file, { publicKey: UC_PUBLIC_KEY, store: 'auto' }),
+      timeout(30000,'Uploadcare')
+    ]);
+    if(!info || !info.cdnUrl) throw new Error('Uploadcare вернул пустой ответ');
+    return info; // { cdnUrl, uuid, name, size, ... }
   }
 
   /* DOM */
@@ -317,7 +318,7 @@
   /* State */
   let currentUser=null, unsubPhotos=null, unsubComments=null, unsubLikes=null, unsubModeration=null, openPhotoId=null;
   let pendingAvatarFile=null, pendingAvatarPreviewURL=null;
-  // NEW: блокировки от повторных кликов
+  // защита от повторных кликов
   let isUploadingPhoto=false, isPublishingAvatar=false;
 
   /* helpers */
@@ -430,80 +431,104 @@
     profPublishActions.classList.add('hidden'); renderProfile();
   });
 
-  // Публикация аватара (быстро закрываем и блокируем повтор)
-  profPublish.addEventListener('click', async ()=>{
-    if(!currentUser || !pendingAvatarFile) return;
-    if(isPublishingAvatar) return;
-    isPublishingAvatar=true;
-    profPublish.disabled=true; profPublish.textContent='Публикуем…';
-    try{
-      const info = await uploadcareUpload(pendingAvatarFile);
-      const url = info.cdnUrl;
-      await updateProfile(currentUser,{ photoURL:url });
-      await updateDoc(doc(db,'users',currentUser.uid),{ photoURL:url });
-      const mini=$('#mini-avatar'); if(mini) mini.src=url;
-      pendingAvatarFile=null; if(pendingAvatarPreviewURL){URL.revokeObjectURL(pendingAvatarPreviewURL); pendingAvatarPreviewURL=null;}
-      profPublishActions.classList.add('hidden'); renderProfile();
+  // Публикация аватара — быстро закрываем и не залипаем
+  profPublish.addEventListener('click', async () => {
+    if (!currentUser || !pendingAvatarFile) return;
+    if (isPublishingAvatar) return;
+    isPublishingAvatar = true;
+
+    profPublish.disabled = true;
+    profPublish.textContent = 'Публикуем…';
+
+    try {
+      const { cdnUrl } = await ucUpload(pendingAvatarFile);
+
+      await updateProfile(currentUser, { photoURL: cdnUrl });
+      await updateDoc(doc(db, 'users', currentUser.uid), { photoURL: cdnUrl });
+
+      const mini = $('#mini-avatar'); if (mini) mini.src = cdnUrl;
+
+      pendingAvatarFile = null;
+      if (pendingAvatarPreviewURL) { URL.revokeObjectURL(pendingAvatarPreviewURL); pendingAvatarPreviewURL = null; }
+      profPublishActions.classList.add('hidden');
+      renderProfile();
+
       closeModal(profileModal);
-    }catch(err){
-      console.error('Uploadcare avatar error:', err);
-      alert('Ошибка публикации: '+(err?.message||err?.status||err||'unknown')+'\nПроверь VPN/AdBlock и Signed uploads в Uploadcare.');
-    }finally{
-      isPublishingAvatar=false; profPublish.disabled=false; profPublish.textContent='Опубликовать профиль';
+    } catch (err) {
+      alert('Ошибка публикации аватара: ' + (err?.message || err));
+    } finally {
+      isPublishingAvatar = false;
+      profPublish.disabled = false;
+      profPublish.textContent = 'Опубликовать профиль';
     }
   });
 
-  /* Upload photo (быстро закрываем и блокируем повтор) */
-  uploadForm.addEventListener('submit', async e=>{
+  /* Upload photo — быстро закрываем и не залипаем */
+  uploadForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if(!currentUser){ openAuth(); return; }
-    if(isUploadingPhoto) return;
-    isUploadingPhoto=true;
-    const btnSubmit=uploadForm.querySelector('button[type="submit"]');
+    if (!currentUser) { openAuth(); return; }
+    if (isUploadingPhoto) return;
+    isUploadingPhoto = true;
 
-    const title=photoTitleInput.value.trim();
-    const file=photoFileInput.files?.[0];
-    if(!file){ alert('Прикрепите фото'); isUploadingPhoto=false; return; }
-    if(!/^image\//.test(file.type)){ alert('Только изображения'); isUploadingPhoto=false; return; }
-    if(file.size>8*1024*1024){ alert('Файл > 8 МБ'); isUploadingPhoto=false; return; }
+    const btnSubmit = uploadForm.querySelector('button[type="submit"]');
+    btnSubmit.disabled = true;
+    btnSubmit.textContent = 'Загружаем…';
 
-    btnSubmit.disabled=true; btnSubmit.textContent='Загружаем…';
-    try{
-      const info = await uploadcareUpload(file);
-      const url = info.cdnUrl;
-      await addDoc(collection(db,'photos'),{
-        title, imageURL:url, storagePath:`uploadcare:${info.uuid}`,
-        ownerUid:currentUser.uid, ownerName:currentUser.displayName||'Без имени', ownerPhoto:currentUser.photoURL||'',
-        createdAt:serverTimestamp(), approved:false
+    const title = photoTitleInput.value.trim();
+    const file  = photoFileInput.files?.[0];
+
+    if (!file) { alert('Прикрепите фото'); reset(); return; }
+    if (!/^image\//.test(file.type)) { alert('Только изображения'); reset(); return; }
+    if (file.size > 8 * 1024 * 1024) { alert('Файл > 8 МБ'); reset(); return; }
+
+    try {
+      const { cdnUrl, uuid } = await ucUpload(file);
+
+      await addDoc(collection(db, 'photos'), {
+        title,
+        imageURL: cdnUrl,
+        storagePath: `uploadcare:${uuid}`,
+        ownerUid: currentUser.uid,
+        ownerName: currentUser.displayName || 'Без имени',
+        ownerPhoto: currentUser.photoURL || '',
+        createdAt: serverTimestamp(),
+        approved: false
       });
-      photoTitleInput.value=''; photoFileInput.value='';
+
+      photoTitleInput.value = '';
+      photoFileInput.value  = '';
       closeModal(uploadModal);
-      openTab('gallery'); openModal(library); listenGallery(true);
+
+      openTab('gallery');
+      openModal(library);
+      listenGallery(true);
+
       alert('Фото отправлено на модерацию!');
-    }catch(err){
-      console.error('Uploadcare photo error:', err);
-      alert('Загрузка не удалась: '+(err?.message||err?.status||err||'unknown')+'\nПроверь VPN/AdBlock, размер файла и Signed uploads в Uploadcare.');
-    }finally{
-      isUploadingPhoto=false; btnSubmit.disabled=false; btnSubmit.textContent='Выложить';
+    } catch (err) {
+      alert('Загрузка не удалась: ' + (err?.message || err));
+    } finally {
+      reset();
+    }
+
+    function reset(){
+      isUploadingPhoto = false;
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = 'Выложить';
     }
   });
 
-  /* Gallery (с лимитом для скорости) */
+  /* Gallery (с лимитом для скорости, без композитного индекса) */
   function listenGallery(myOnly=false){
     if(unsubPhotos) unsubPhotos();
     galleryGrid.innerHTML='<div class="rules">Загрузка…</div>';
+
     let qref;
     if(myOnly && currentUser){
-      qref=query(collection(db,'photos'),
-                 where('ownerUid','==', currentUser.uid),
-                 orderBy('createdAt','desc'),
-                 limit(48));
+      qref=query(collection(db,'photos'), where('ownerUid','==', currentUser.uid), limit(48));
     }else{
-      qref=query(collection(db,'photos'),
-                 where('approved','==', true),
-                 orderBy('createdAt','desc'),
-                 limit(48));
+      qref=query(collection(db,'photos'), where('approved','==', true), limit(48));
     }
+
     unsubPhotos = onSnapshot(qref, snap=>{
       galleryGrid.innerHTML='';
       if(snap.empty){ galleryGrid.innerHTML='<div class="rules">Пока пусто.</div>'; return; }
@@ -577,12 +602,12 @@
     openModal(photoModal);
   }
 
-  /* Moderation (с лимитом) */
+  /* Moderation (без композитного индекса) */
   function listenModeration(){
     if(!currentUser || !isAdmin(currentUser.uid)) { modGrid.innerHTML='<div class="rules">Нет доступа.</div>'; return; }
     if(unsubModeration) unsubModeration();
     modGrid.innerHTML='<div class="rules">Загрузка…</div>';
-    const qMod=query(collection(db,'photos'), where('approved','==',false), orderBy('createdAt','desc'), limit(48));
+    const qMod=query(collection(db,'photos'), where('approved','==',false), limit(48));
     unsubModeration=onSnapshot(qMod, snap=>{
       modGrid.innerHTML=''; if(snap.empty){ modGrid.innerHTML='<div class="rules">Очередь пустая.</div>'; return; }
       snap.forEach(docu=>{
