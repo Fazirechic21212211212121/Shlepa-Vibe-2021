@@ -260,9 +260,10 @@
   })();
   </script>
 
-  <!-- ===== Firebase + логика ===== -->
-  <script type="module">
-/* ================== ИМПОРТЫ ================== */
+<script type="module">
+/* =========================
+   Firebase + логика сайта
+   ========================= */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {
   getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence,
@@ -271,10 +272,10 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import {
   getFirestore, collection, addDoc, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
-  serverTimestamp, query, where, orderBy, limit, startAfter
+  serverTimestamp, query, where, onSnapshot, limit, orderBy
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-/* ================== КОНФИГ (как у тебя) ================== */
+/* ===== Firebase (Auth + Firestore) ===== */
 const firebaseConfig = {
   apiKey: "AIzaSyCB-HVpTsUkvoJg6r3608eYU6vsjewECtA",
   authDomain: "shlepa-56015.firebaseapp.com",
@@ -284,184 +285,179 @@ const firebaseConfig = {
   appId: "1:885165142953:web:3262d5b934b720af540ab8",
   measurementId: "G-3D1W27T1SE"
 };
-const ADMIN_UIDS = ["9sexkqpl0BWBGiZtHYxFMtSbVJ22"]; // твой админ
+const ADMIN_UIDS = ["9sexkqpl0BWBGiZtHYxFMtSbVJ22"]; // админ(ы) модерации
+
+const app  = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+setPersistence(auth, browserLocalPersistence);
+const db   = getFirestore(app);
+
+/* ===== Uploadcare helper (Storage) ===== */
 const UC_PUBLIC_KEY = '7f7623a14608e95449ee';
-
-/* ================== INIT ================== */
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app); setPersistence(auth, browserLocalPersistence);
-const db = getFirestore(app);
-
-/* ================== УТИЛЫ ================== */
-const $  = s => document.querySelector(s);
-const $$ = s => Array.from(document.querySelectorAll(s));
-const isAdmin = uid => ADMIN_UIDS.includes(uid);
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-const fmtDate = ts => (ts?.toDate ? ts.toDate() : new Date(ts)).toLocaleString('ru-RU');
-
-function niceAuthError(e){
-  const c = e?.code || '';
-  if (c.includes('email-already-in-use')) return 'Эта почта уже зарегистрирована.';
-  if (c.includes('invalid-email'))       return 'Неверный формат email.';
-  if (c.includes('user-not-found'))      return 'Пользователь не найден.';
-  if (c.includes('wrong-password'))      return 'Неверный пароль.';
-  if (c.includes('weak-password'))       return 'Слишком короткий пароль (минимум 8).';
-  if (c.includes('popup-closed-by-user'))return 'Окно входа было закрыто.';
-  if (c.includes('network-request-failed')) return 'Проблема с сетью. Проверь интернет.';
-  return e?.message || 'Что-то пошло не так.';
-}
-function niceUploadError(e){
-  const m = (e?.message||'').toLowerCase();
-  if (m.includes('timeout')) return 'Загрузка заняла слишком много времени. Попробуй ещё раз.';
-  if (m.includes('network')) return 'Нет соединения с сетью. Попробуй ещё раз.';
-  return 'Ошибка загрузки файла. Попробуй ещё раз.';
-}
-
-/* Устойчивый Uploadcare (до 2 повторов) */
-async function ucUploadWithRetry(file, retries = 2){
-  let last;
-  for (let i=0;i<=retries;i++){
-    try {
-      const info = await uploadcare.fileFrom('object', file, { publicKey: UC_PUBLIC_KEY, store: 'auto' });
-      if (!info?.cdnUrl) throw new Error('uploadcare: пустой ответ');
-      return info; // { cdnUrl, uuid, ... }
-    } catch(e){
-      last = e;
-      if (i < retries) await sleep(1500*(i+1));
-    }
+function timeout(ms, label='Операция'){ return new Promise((_,rej)=>setTimeout(()=>rej(new Error(label+' не уложилась по времени')),ms)); }
+async function ucUpload(file){
+  if (typeof uploadcare === 'undefined' || !uploadcare.fileFrom) {
+    throw new Error('Uploadcare не подключён. Проверь <script src="https://ucarecdn.com/libs/widget/..."> и ключ.');
   }
-  throw last;
+  const info = await Promise.race([
+    uploadcare.fileFrom('object', file, { publicKey: UC_PUBLIC_KEY, store:'auto' }),
+    timeout(30000,'Загрузка файла')
+  ]);
+  if (!info?.cdnUrl) throw new Error('Uploadcare вернул пустой ответ');
+  return info; // { cdnUrl, uuid, name, size, ... }
 }
 
-/* ================== DOM ССЫЛКИ ================== */
+/* ===== Утилиты ===== */
+const $  = (s)=>document.querySelector(s);
+const $$ = (s)=>Array.from(document.querySelectorAll(s));
+const fmtDate = (ts)=> (ts?.toDate ? ts.toDate() : new Date(ts)).toLocaleString('ru-RU');
+const isAdmin = (uid)=> ADMIN_UIDS.includes(uid);
+
+// Дружелюбные тексты ошибок Firebase Auth
+function niceAuthError(err){
+  const code = err?.code || '';
+  const map = {
+    'auth/email-already-in-use': 'Эта почта уже зарегистрирована.',
+    'auth/invalid-email':        'Некорректный адрес электронной почты.',
+    'auth/weak-password':        'Слишком простой пароль (минимум 6 символов).',
+    'auth/wrong-password':       'Неверный пароль.',
+    'auth/user-not-found':       'Пользователь не найден.',
+    'auth/popup-closed-by-user': 'Окно входа было закрыто.',
+    'auth/cancelled-popup-request':'Окно входа отменено.',
+    'auth/network-request-failed':'Проблема с сетью. Повторите попытку.'
+  };
+  return map[code] || (err?.message || 'Неизвестная ошибка.');
+}
+
+/* ===== DOM: элементы ===== */
 const authbox = $('#authbox');
 const openLoginBtn = $('#open-login');
 
-const library = $('#library');
+const library      = $('#library');
 const openGalleryBtn = $('#open-gallery');
-const openTiktokBtn = $('#open-tiktok');
-const panelClose = $('#panel-close');
-const panelTabs = $$('.panel-tab');
-const tabGallery = $('#tab-gallery');
-const tabTiktok  = $('#tab-tiktok');
-const tabMod     = $('#tab-mod');
-const tabModBtn  = $('#tab-mod-btn');
+const openTiktokBtn  = $('#open-tiktok');
+const panelClose     = $('#panel-close');
+const panelTabs      = $$('.panel-tab');
+const tabGallery     = $('#tab-gallery');
+const tabTiktok      = $('#tab-tiktok');
+const tabMod         = $('#tab-mod');
+const tabModBtn      = $('#tab-mod-btn');
 
-const tiktokIframe = $('#tiktok-iframe');
+const tiktokIframe   = $('#tiktok-iframe');
 const tiktokFallback = $('#tiktok-fallback');
 const TIKTOK_URL = 'https://www.tiktok.com/search?q=%D0%B2%D0%B0%D0%B9%D0%B1%202021%20%D0%B3%D0%BE%D0%B4';
 
-const addPhotoBtn = $('#add-photo');
-const galleryGrid = $('#gallery-grid');
+const addPhotoBtn   = $('#add-photo');
+const galleryGrid   = $('#gallery-grid');
 
-const uploadModal = $('#upload-modal');
-const uploadClose = $('#upload-close');
-const uploadCancel = $('#upload-cancel');
-const uploadForm = $('#upload-form');
+const uploadModal   = $('#upload-modal');
+const uploadClose   = $('#upload-close');
+const uploadCancel  = $('#upload-cancel');
+const uploadForm    = $('#upload-form');
 const photoTitleInput = $('#photo-title');
 const photoFileInput  = $('#photo-file');
 
 const photoModal = $('#photo-modal');
 const photoClose = $('#photo-close');
-const pvImg = $('#pv-img');
-const pvMeta = $('#pv-meta');
-const pvLike = $('#pv-like');
-const pvLikeCount = $('#pv-like-count');
-const pvDelete = $('#pv-delete');
+const pvImg      = $('#pv-img');
+const pvMeta     = $('#pv-meta');
+const pvLike     = $('#pv-like');
+const pvLikeCount= $('#pv-like-count');
+const pvDelete   = $('#pv-delete');
 const pvComments = $('#pv-comments');
-const pvCommentForm = $('#pv-comment-form');
+const pvCommentForm  = $('#pv-comment-form');
 const pvCommentInput = $('#pv-comment-input');
 
-const authModal = $('#auth-modal');
-const authClose = $('#auth-close');
-const tabLogin = $('#tab-login');
-const tabRegister = $('#tab-register');
-const loginForm = $('#login-form');
+const authModal  = $('#auth-modal');
+const authClose  = $('#auth-close');
+const tabLogin   = $('#tab-login');
+const tabRegister= $('#tab-register');
+const loginForm  = $('#login-form');
 const registerForm = $('#register-form');
-const googleLogin = $('#google-login');
-const googleRegister = $('#google-register');
+const googleLogin   = $('#google-login');
+const googleRegister= $('#google-register');
 
 const profileModal = $('#profile-modal');
-const profileClose  = $('#profile-close');
-const profAvatar    = $('#prof-avatar');
-const profName      = $('#prof-name');
-const profEmail     = $('#prof-email');
-const profAvatarFile= $('#prof-avatar-file');
-const profPublishActions = $('#prof-publish-actions');
-const profPublish   = $('#prof-publish');
+const profileClose = $('#profile-close');
+const profAvatar   = $('#prof-avatar');
+const profName     = $('#prof-name');
+const profEmail    = $('#prof-email');
+const profAvatarFile    = $('#prof-avatar-file');
+const profPublishActions= $('#prof-publish-actions');
+const profPublish  = $('#prof-publish');
 const profCancelDraft = $('#prof-cancel-draft');
-const toMyPhotos    = $('#to-my-photos');
+const toMyPhotos   = $('#to-my-photos');
 const openModerationBtn = $('#open-moderation');
-const logoutBtn     = $('#logout');
+const logoutBtn    = $('#logout');
 
-/* ================== СОСТОЯНИЕ ================== */
-let currentUser = null;
-let openPhotoId  = null;
-let pendingAvatarFile = null, pendingAvatarPreviewURL = null;
-let isUploadingPhoto = false, isPublishingAvatar = false;
+/* ===== Состояние ===== */
+let currentUser=null;
+let unsubPhotos=null, unsubComments=null, unsubLikes=null, unsubModeration=null;
+let openPhotoId=null;
 
-/* Галерея: пэйджинг */
-const PAGE = 24;
-let galleryMode = 'all'; // 'all' | 'mine'
-let galleryCursor = null;
-let galleryLoading = false;
-let galleryObserver = null;
-const moreBtn = document.createElement('button');
-moreBtn.className = 'btn';
-moreBtn.style.margin = '12px auto';
-moreBtn.textContent = 'Показать ещё';
-moreBtn.addEventListener('click', loadMoreGallery);
+let pendingAvatarFile=null, pendingAvatarPreviewURL=null;
+let isUploadingPhoto=false, isPublishingAvatar=false;
 
-/* ================== ХЭЛПЕРЫ UI ================== */
-const openModal = el => { el.classList.add('open'); el.setAttribute('aria-hidden','false'); };
-const closeModal = el => { el.classList.remove('open'); el.setAttribute('aria-hidden','true'); };
+/* ===== Общие функции UI ===== */
+function openModal(el){ el.classList.add('open'); el.setAttribute('aria-hidden','false'); }
+function closeModal(el){ el.classList.remove('open'); el.setAttribute('aria-hidden','true'); }
 function openTab(tab){
   panelTabs.forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
   tabGallery.classList.toggle('active', tab==='gallery');
-  tabTiktok.classList.toggle('active',  tab==='tiktok');
-  tabMod?.classList.toggle('active',    tab==='mod');
+  tabTiktok .classList.toggle('active', tab==='tiktok');
+  tabMod    ?.classList.toggle('active', tab==='mod');
 }
 function ensureTikTok(){
   tiktokFallback.style.display='none';
   tiktokIframe.src = TIKTOK_URL;
-  setTimeout(()=>tiktokFallback.style.display='grid', 2500);
+  setTimeout(()=>{ tiktokFallback.style.display='grid'; }, 2500);
 }
 
-/* ================== НАВИГАЦИЯ ================== */
-openGalleryBtn.addEventListener('click', ()=>{
-  openTab('gallery'); openModal(library); loadGallery('all');
-});
-openTiktokBtn.addEventListener('click', ()=>{
-  openTab('tiktok');  openModal(library); ensureTikTok();
-});
-panelClose.addEventListener('click', ()=> closeModal(library));
+/* Лоадер в сетке галереи */
+function setGalleryLoading(isLoading){
+  let el = document.getElementById('gallery-loader');
+  if(isLoading){
+    if(!el){
+      el = document.createElement('div');
+      el.id = 'gallery-loader';
+      el.className = 'gallery-loader';
+      el.textContent = 'Загрузка…';
+      galleryGrid.replaceChildren(el);
+    }
+  } else {
+    if(el) el.remove();
+  }
+}
+
+/* ===== Навигация панели ===== */
+openGalleryBtn.addEventListener('click', ()=>{ openTab('gallery'); openModal(library); });
+openTiktokBtn .addEventListener('click', ()=>{ openTab('tiktok');  openModal(library); ensureTikTok(); });
+panelClose    .addEventListener('click', ()=> closeModal(library));
 panelTabs.forEach(btn=>btn.addEventListener('click', ()=>{
-  const tab=btn.dataset.tab;
+  const tab = btn.dataset.tab;
   openTab(tab);
-  if (tab==='tiktok') ensureTikTok();
-  if (tab==='mod')    listenModeration();
-  if (tab==='gallery') loadGallery(galleryMode);
+  if(tab==='tiktok') ensureTikTok();
+  if(tab==='mod')    listenModeration();
 }));
 
-/* ================== МОДАЛКИ: ЗАГРУЗКА ================== */
+/* ===== Загрузка фото (модалка) ===== */
 addPhotoBtn.addEventListener('click', ()=>{
-  if (!currentUser){ openAuth(); return; }
+  if(!currentUser){ openAuth(); return; }
   photoTitleInput.value=''; photoFileInput.value='';
   openModal(uploadModal);
 });
-uploadClose.addEventListener('click', ()=> closeModal(uploadModal));
+uploadClose .addEventListener('click', ()=> closeModal(uploadModal));
 uploadCancel.addEventListener('click', ()=> closeModal(uploadModal));
 
-/* ================== МОДАЛКА ФОТО ================== */
+/* ===== Просмотр фото ===== */
 photoClose.addEventListener('click', ()=>{
+  if (unsubComments) unsubComments();
+  if (unsubLikes) unsubLikes();
   openPhotoId=null; pvImg.src=''; pvMeta.innerHTML=''; pvComments.innerHTML='';
   closeModal(photoModal);
 });
-/* Комменты всегда прокручиваются */
-pvComments.style.overflowY = 'auto';
-pvComments.style.maxHeight = 'calc(70vh - 220px)';
 
-/* ================== АВТОРИЗАЦИЯ UI ================== */
+/* ===== Авторизация ===== */
 const openAuth = ()=> openModal(authModal);
 openLoginBtn?.addEventListener('click', openAuth);
 authClose.addEventListener('click', ()=> closeModal(authModal));
@@ -474,353 +470,403 @@ tabRegister.addEventListener('click', ()=>{
   registerForm.classList.remove('hidden'); loginForm.classList.add('hidden');
 });
 
-/* Google */
 const provider = new GoogleAuthProvider();
-function googleAction(fn){
-  return fn(auth, provider).then(()=> closeModal(authModal))
-  .catch(e=> alert(niceAuthError(e)));
-}
-googleLogin.addEventListener('click', ()=> googleAction(signInWithPopup));
-googleRegister.addEventListener('click', ()=> googleAction(signInWithPopup));
+googleLogin.addEventListener('click', async ()=>{
+  try { await signInWithPopup(auth, provider); closeModal(authModal); }
+  catch(e){ alert('Ошибка входа через Google: ' + niceAuthError(e)); }
+});
+googleRegister.addEventListener('click', async ()=>{
+  try { await signInWithPopup(auth, provider); closeModal(authModal); }
+  catch(e){ alert('Ошибка входа через Google: ' + niceAuthError(e)); }
+});
 
-/* Email/Пароль */
-loginForm.addEventListener('submit', async e=>{
+loginForm.addEventListener('submit', async (e)=>{
   e.preventDefault();
-  try{
+  try {
     await signInWithEmailAndPassword(auth, $('#login-email').value.trim(), $('#login-password').value);
     closeModal(authModal);
-  }catch(e){ alert(niceAuthError(e)); }
-});
-registerForm.addEventListener('submit', async e=>{
-  e.preventDefault();
-  const email=$('#reg-email').value.trim(), p1=$('#reg-password').value, p2=$('#reg-password2').value, display=$('#reg-display').value.trim();
-  if (p1!==p2) { alert('Пароли не совпадают.'); return; }
-  try{
-    const cred = await createUserWithEmailAndPassword(auth,email,p1);
-    const name = display || email.split('@')[0];
-    await updateProfile(cred.user,{displayName:name});
-    await setDoc(doc(db,'users', cred.user.uid), {
-      displayName:name, email:cred.user.email||'', photoURL:cred.user.photoURL||'', createdAt:serverTimestamp()
-    });
-    closeModal(authModal);
-  }catch(e){ alert(niceAuthError(e)); }
+  } catch(err){
+    alert(niceAuthError(err));
+  }
 });
 
-/* ================== AUTH STATE ================== */
+registerForm.addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const email=$('#reg-email').value.trim();
+  const p1=$('#reg-password').value, p2=$('#reg-password2').value;
+  const display=$('#reg-display').value.trim();
+  if(p1!==p2){ alert('Пароли не совпадают.'); return; }
+  try{
+    const cred = await createUserWithEmailAndPassword(auth, email, p1);
+    const name = display || email.split('@')[0];
+    await updateProfile(cred.user, { displayName: name });
+    await setDoc(doc(db,'users', cred.user.uid), {
+      displayName: name, email: cred.user.email||'', photoURL: cred.user.photoURL||'', createdAt: serverTimestamp()
+    });
+    closeModal(authModal);
+  }catch(err){ alert(niceAuthError(err)); }
+});
+
+/* ===== Состояние пользователя ===== */
 onAuthStateChanged(auth, async (user)=>{
   currentUser = user;
-  const drawIn = u=>{
+
+  const drawLoggedIn = (u)=>{
     authbox.innerHTML='';
-    const b=document.createElement('button'); b.className='btn'; b.id='open-profile';
-    b.innerHTML=`<img id="mini-avatar" class="avatar" alt="Аватар" src="${u.photoURL||'https://i.pravatar.cc/64?u='+u.uid}"> Профиль`;
-    b.addEventListener('click', openProfile);
-    authbox.appendChild(b);
+    const btn=document.createElement('button'); btn.className='btn'; btn.id='open-profile';
+    btn.innerHTML=`<img id="mini-avatar" class="avatar" alt="Аватар" src="${u.photoURL || 'https://i.pravatar.cc/64?u='+u.uid}"> Профиль`;
+    btn.addEventListener('click', openProfile);
+    authbox.appendChild(btn);
   };
-  const drawOut = ()=>{
+  const drawLoggedOut = ()=>{
     authbox.innerHTML='';
     const b=document.createElement('button'); b.className='btn'; b.id='open-login'; b.textContent='Войти / Регистрация';
     b.addEventListener('click', openAuth); authbox.appendChild(b);
   };
 
-  if (user){
-    drawIn(user);
-    if (isAdmin(user.uid)){ tabModBtn?.classList.remove('hidden'); openModerationBtn?.classList.remove('hidden'); }
-    else { tabModBtn?.classList.add('hidden'); openModerationBtn?.classList.add('hidden'); }
+  if(user){
+    drawLoggedIn(user);
+    if(isAdmin(user.uid)){ tabModBtn?.classList.remove('hidden'); openModerationBtn?.classList.remove('hidden'); }
+    else{ tabModBtn?.classList.add('hidden'); openModerationBtn?.classList.add('hidden'); }
+
+    // создадим профиль в БД при первом входе (без падения UI, если нет прав)
     try{
-      const r=doc(db,'users',user.uid), d=await getDoc(r);
-      if (!d.exists()) await setDoc(r,{displayName:user.displayName||'', email:user.email||'', photoURL:user.photoURL||'', createdAt:serverTimestamp()});
-    }catch(_) {}
-  } else {
-    drawOut(); tabModBtn?.classList.add('hidden'); openModerationBtn?.classList.add('hidden');
+      const uref = doc(db,'users', user.uid);
+      const udoc = await getDoc(uref);
+      if(!udoc.exists()){
+        await setDoc(uref, { displayName:user.displayName||'', email:user.email||'', photoURL:user.photoURL||'', createdAt:serverTimestamp() });
+      }
+    }catch(e){ console.warn('user doc error', e); }
+  }else{
+    drawLoggedOut();
+    tabModBtn?.classList.add('hidden'); openModerationBtn?.classList.add('hidden');
   }
 });
 
-/* ================== ПРОФИЛЬ ================== */
+/* ===== Профиль ===== */
 function openProfile(){ if(!currentUser) return; openModal(profileModal); renderProfile(); }
 profileClose.addEventListener('click', ()=> closeModal(profileModal));
 logoutBtn.addEventListener('click', async ()=>{ await signOut(auth); closeModal(profileModal); });
 
 function renderProfile(){
-  profAvatar.src = currentUser.photoURL || 'https://i.pravatar.cc/128?u='+currentUser.uid;
-  profName.textContent = currentUser.displayName || '(без имени)';
-  profEmail.textContent = currentUser.email || '';
+  profAvatar.src = currentUser?.photoURL || 'https://i.pravatar.cc/128?u=' + (currentUser?.uid || 'guest');
+  profName.textContent  = currentUser?.displayName || '(без имени)';
+  profEmail.textContent = currentUser?.email || '';
 }
-profAvatarFile.addEventListener('change', e=>{
-  const f=e.target.files?.[0]; if(!f||!currentUser) return;
-  if (f.size>5*1024*1024){ alert('Слишком большой файл (>5 МБ)'); return; }
-  pendingAvatarFile=f;
+
+profAvatarFile.addEventListener('change', (e)=>{
+  const f = e.target.files?.[0]; if(!f || !currentUser) return;
+  if (f.size > 5*1024*1024){ alert('Слишком большой файл (>5 МБ).'); return; }
+  pendingAvatarFile = f;
   if (pendingAvatarPreviewURL) URL.revokeObjectURL(pendingAvatarPreviewURL);
   pendingAvatarPreviewURL = URL.createObjectURL(f);
   profAvatar.src = pendingAvatarPreviewURL;
   profPublishActions.classList.remove('hidden');
 });
+
 profCancelDraft.addEventListener('click', ()=>{
   pendingAvatarFile=null;
   if (pendingAvatarPreviewURL){ URL.revokeObjectURL(pendingAvatarPreviewURL); pendingAvatarPreviewURL=null; }
   profPublishActions.classList.add('hidden');
   renderProfile();
 });
+
 profPublish.addEventListener('click', async ()=>{
-  if (!currentUser || !pendingAvatarFile || isPublishingAvatar) return;
+  if(!currentUser || !pendingAvatarFile) return;
+  if(isPublishingAvatar) return;
   isPublishingAvatar = true;
-  profPublish.disabled = true; profPublish.textContent = 'Публикуем…';
+
+  profPublish.disabled=true; profPublish.textContent='Публикуем…';
   try{
-    const { cdnUrl } = await ucUploadWithRetry(pendingAvatarFile);
+    const { cdnUrl } = await ucUpload(pendingAvatarFile);
     await updateProfile(currentUser, { photoURL: cdnUrl });
     await updateDoc(doc(db,'users', currentUser.uid), { photoURL: cdnUrl });
-    const mini=$('#mini-avatar'); if (mini) mini.src=cdnUrl;
+
+    const mini=$('#mini-avatar'); if(mini) mini.src = cdnUrl;
+
     pendingAvatarFile=null;
-    if (pendingAvatarPreviewURL) { URL.revokeObjectURL(pendingAvatarPreviewURL); pendingAvatarPreviewURL=null; }
-    profPublishActions.classList.add('hidden'); renderProfile(); closeModal(profileModal);
-  }catch(e){ alert(niceUploadError(e)); }
-  finally { isPublishingAvatar=false; profPublish.disabled=false; profPublish.textContent='Опубликовать профиль'; }
+    if(pendingAvatarPreviewURL){ URL.revokeObjectURL(pendingAvatarPreviewURL); pendingAvatarPreviewURL=null; }
+    profPublishActions.classList.add('hidden');
+    renderProfile();
+    closeModal(profileModal);
+  }catch(err){
+    alert('Не удалось опубликовать аватар: ' + (err?.message || err));
+  }finally{
+    isPublishingAvatar=false;
+    profPublish.disabled=false; profPublish.textContent='Опубликовать профиль';
+  }
 });
 
-/* ================== ЗАГРУЗКА ФОТО ================== */
-uploadForm.addEventListener('submit', async e=>{
+/* ===== Загрузка фото в галерею ===== */
+uploadForm.addEventListener('submit', async (e)=>{
   e.preventDefault();
-  if (!currentUser){ openAuth(); return; }
-  if (isUploadingPhoto) return;
+  if(!currentUser){ openAuth(); return; }
+  if(isUploadingPhoto) return;
   isUploadingPhoto = true;
-  const submitBtn = uploadForm.querySelector('button[type="submit"]');
-  submitBtn.disabled = true; submitBtn.textContent='Загружаем…';
+
+  const btn = uploadForm.querySelector('button[type="submit"]');
+  btn.disabled = true; btn.textContent = 'Загружаем…';
+
   const title = photoTitleInput.value.trim();
   const file  = photoFileInput.files?.[0];
-  if (!file){ alert('Прикрепи фото.'); reset(); return; }
-  if (!/^image\//.test(file.type)){ alert('Можно загружать только изображения.'); reset(); return; }
-  if (file.size>8*1024*1024){ alert('Файл больше 8 МБ.'); reset(); return; }
+
+  const reset = ()=>{ isUploadingPhoto=false; btn.disabled=false; btn.textContent='Выложить'; };
+
+  if(!file){ alert('Прикрепите фото.'); reset(); return; }
+  if(!/^image\//.test(file.type)){ alert('Можно загружать только изображения.'); reset(); return; }
+  if(file.size > 8*1024*1024){ alert('Файл больше 8 МБ.'); reset(); return; }
 
   try{
-    const { cdnUrl, uuid } = await ucUploadWithRetry(file);
+    const { cdnUrl, uuid } = await ucUpload(file);
+
     await addDoc(collection(db,'photos'), {
-      title, imageURL: cdnUrl, storagePath: `uploadcare:${uuid}`,
-      ownerUid: currentUser.uid, ownerName: currentUser.displayName||'Без имени',
-      ownerPhoto: currentUser.photoURL || '', createdAt: serverTimestamp(),
+      title,
+      imageURL: cdnUrl,
+      storagePath: `uploadcare:${uuid}`,
+      ownerUid: currentUser.uid,
+      ownerName: currentUser.displayName || 'Без имени',
+      ownerPhoto: currentUser.photoURL || '',
+      createdAt: serverTimestamp(),
       approved: false
     });
+
     photoTitleInput.value=''; photoFileInput.value='';
     closeModal(uploadModal);
-    openTab('gallery'); openModal(library);
-    loadGallery('mine'); // покажем «мои» сразу
-    alert('Фото отправлено на модерацию!');
-  }catch(e){ alert(niceUploadError(e)); }
-  finally { reset(); }
 
-  function reset(){ isUploadingPhoto=false; submitBtn.disabled=false; submitBtn.textContent='Выложить'; }
+    openTab('gallery'); openModal(library);
+    listenGallery(true);
+
+    alert('Фото отправлено на модерацию!');
+  }catch(err){
+    alert('Загрузка не удалась: ' + (err?.message || err));
+  }finally{
+    reset();
+  }
 });
 
-/* ================== ГАЛЕРЕЯ: ПАГИНАЦИЯ ================== */
-async function loadGallery(mode='all'){
-  galleryMode = mode;
-  // сброс
-  galleryGrid.innerHTML = '<div class="rules">Загрузка…</div>';
-  galleryCursor = null;
-  if (galleryObserver){ galleryObserver.disconnect(); galleryObserver=null; }
-  moreBtn.remove();
+/* ===== Галерея (без обязательного индекса) ===== */
+function listenGallery(myOnly=false){
+  if (unsubPhotos) unsubPhotos();
+  setGalleryLoading(true);
 
-  try{
-    const qBase = collection(db,'photos');
-    let q1;
-    if (galleryMode==='mine' && currentUser){
-      // нужен индекс: ownerUid ASC + createdAt DESC (scope: Collection)
-      q1 = query(qBase, where('ownerUid','==', currentUser.uid), orderBy('createdAt','desc'), limit(PAGE));
-    } else {
-      // нужен индекс: approved ASC + createdAt DESC (scope: Collection)
-      q1 = query(qBase, where('approved','==', true), orderBy('createdAt','desc'), limit(PAGE));
-    }
-    const snap = await getDocs(q1);
-    renderCards(snap, true);
-    galleryCursor = snap.docs[snap.docs.length-1] || null;
-
-    // Если есть ещё — включаем авто-догрузку
-    if (snap.size === PAGE){
-      tabGallery.appendChild(moreBtn);
-      // авто-подгрузка при скролле
-      const sentinel = document.createElement('div');
-      sentinel.style.height='1px';
-      tabGallery.appendChild(sentinel);
-      galleryObserver = new IntersectionObserver(entries=>{
-        if(entries.some(e=>e.isIntersecting)) loadMoreGallery();
-      }, { root: tabGallery, rootMargin: '300px 0px', threshold: 0 });
-      galleryObserver.observe(sentinel);
-    }
-  }catch(e){
-    galleryGrid.innerHTML = '<div class="rules">Не удалось загрузить галерею.</div>';
-    console.error(e);
+  let qref;
+  if (myOnly && currentUser){
+    qref = query(collection(db,'photos'),
+      where('ownerUid','==', currentUser.uid),
+      limit(48)
+    );
+  } else {
+    qref = query(collection(db,'photos'),
+      where('approved','==', true),
+      limit(48)
+    );
   }
-}
-async function loadMoreGallery(){
-  if (galleryLoading || !galleryCursor) return;
-  galleryLoading = true;
-  try{
-    const qBase = collection(db,'photos');
-    let q1;
-    if (galleryMode==='mine' && currentUser){
-      q1 = query(qBase, where('ownerUid','==', currentUser.uid), orderBy('createdAt','desc'), startAfter(galleryCursor), limit(PAGE));
-    } else {
-      q1 = query(qBase, where('approved','==', true), orderBy('createdAt','desc'), startAfter(galleryCursor), limit(PAGE));
-    }
-    const snap = await getDocs(q1);
-    renderCards(snap, false);
-    galleryCursor = snap.docs[snap.docs.length-1] || null;
-    if (snap.size < PAGE){ moreBtn.remove(); if (galleryObserver) galleryObserver.disconnect(); }
-  }catch(e){ console.error(e); }
-  finally { galleryLoading=false; }
-}
-function renderCards(snap, replace){
-  if (replace) galleryGrid.innerHTML='';
-  if (snap.empty && replace){ galleryGrid.innerHTML = '<div class="rules">Пока пусто.</div>'; return; }
-  snap.forEach(docu=>{
-    const d = docu.data();
-    const card = document.createElement('div'); card.className='card'; card.dataset.id = docu.id;
-    const img  = document.createElement('img'); img.src=d.imageURL; img.alt=d.title||'Фото';
-    const meta = document.createElement('div'); meta.className='meta';
-    const left = document.createElement('div'); left.innerHTML = `<strong>${d.title||'Без названия'}</strong><br><span class="rules">${d.ownerName||''}</span>`;
-    const right= document.createElement('div');
-    if (d.approved!==true){ const b=document.createElement('span'); b.className='badge pending'; b.textContent='На модерации'; right.appendChild(b); }
-    meta.appendChild(left); meta.appendChild(right);
-    card.appendChild(img); card.appendChild(meta);
-    card.addEventListener('click', ()=> openPhoto(docu.id, d));
-    galleryGrid.appendChild(card);
+
+  unsubPhotos = onSnapshot(qref, (snap)=>{
+    setGalleryLoading(false);
+    galleryGrid.textContent='';
+
+    if(snap.empty){ galleryGrid.innerHTML = '<div class="rules">Пока пусто.</div>'; return; }
+
+    const frag = document.createDocumentFragment();
+    snap.forEach(docu=>{
+      const d = docu.data();
+      const card = document.createElement('div'); card.className='card'; card.dataset.id=docu.id;
+
+      const img  = document.createElement('img');  img.src=d.imageURL; img.alt=d.title||'Фото';
+      const meta = document.createElement('div');  meta.className='meta';
+      const left = document.createElement('div');  left.innerHTML = `<strong>${d.title||'Без названия'}</strong><br><span class="rules">${d.ownerName||''}</span>`;
+      const right= document.createElement('div');
+      if(d.approved!==true){
+        const b=document.createElement('span'); b.className='badge pending'; b.textContent='На модерации';
+        right.appendChild(b);
+      }
+      meta.appendChild(left); meta.appendChild(right);
+      card.appendChild(img); card.appendChild(meta);
+
+      card.addEventListener('click', ()=> openPhoto(docu.id, d));
+      frag.appendChild(card);
+    });
+    galleryGrid.appendChild(frag);
+  }, (err)=>{
+    console.error(err);
+    setGalleryLoading(false);
+    galleryGrid.innerHTML = '<div class="rules">Ошибка загрузки галереи.</div>';
   });
 }
+listenGallery(false);
 
-/* ================== ОДНО ФОТО (лайки/комменты/удаление) ================== */
+toMyPhotos.addEventListener('click', ()=>{
+  closeModal(profileModal);
+  openTab('gallery'); openModal(library);
+  listenGallery(true);
+});
+
+/* ===== Открытие фото, лайки, комментарии ===== */
 async function openPhoto(id, data){
   openPhotoId = id;
+
   pvImg.src = data.imageURL;
   $('#photo-title-h').textContent = data.title || 'Фото';
   pvMeta.innerHTML = `
     <div><strong>${data.title||'Без названия'}</strong></div>
     <div class="rules">Автор: ${data.ownerName||'Неизвестно'}</div>
-    <div class="rules">Создано: ${data.createdAt?fmtDate(data.createdAt):'…'}</div>`;
+    <div class="rules">Создано: ${data.createdAt?fmtDate(data.createdAt):'…'}</div>
+  `;
   pvDelete.classList.toggle('hidden', !currentUser || currentUser.uid!==data.ownerUid);
 
-  // лайки: просто считаем документы
-  const likesCol = collection(db,'photos',id,'likes');
-  const likesSnap = await getDocs(likesCol);
-  pvLikeCount.textContent = likesSnap.size;
+  // лайки
+  if (unsubLikes) unsubLikes();
+  const likesCol = collection(db,'photos', id, 'likes');
+  unsubLikes = onSnapshot(likesCol, (snap)=>{ pvLikeCount.textContent = snap.size; });
+
   pvLike.onclick = async ()=>{
     if(!currentUser){ openAuth(); return; }
-    const likeRef = doc(db,'photos',id,'likes', currentUser.uid);
+    const likeRef = doc(db,'photos', id, 'likes', currentUser.uid);
     const got = await getDoc(likeRef);
-    if (got.exists()) await deleteDoc(likeRef);
+    if(got.exists()) await deleteDoc(likeRef);
     else await setDoc(likeRef, { uid: currentUser.uid, at: serverTimestamp() });
-    const newSnap = await getDocs(likesCol);
-    pvLikeCount.textContent = newSnap.size;
   };
 
-  // комментарии: листаем по времени
-  pvComments.innerHTML = '<div class="rules">Загрузка комментариев…</div>';
-  const qComm = query(collection(db,'photos',id,'comments'), orderBy('at','asc'), limit(100));
-  const cSnap = await getDocs(qComm);
-  pvComments.innerHTML='';
-  if (cSnap.empty){ pvComments.innerHTML='<div class="rules">Комментариев пока нет.</div>'; }
-  else cSnap.forEach(c=>{
-    const cd=c.data();
-    const el=document.createElement('div');
-    el.style.borderBottom='1px dashed rgba(255,255,255,.15)';
-    el.style.padding='6px 0';
-    el.innerHTML = `<div><strong>${cd.authorName||'Аноним'}</strong> <span class="rules">${fmtDate(cd.at)}</span></div><div>${cd.text||''}</div>`;
-    pvComments.appendChild(el);
-  });
-
-  pvCommentForm.onsubmit = async e=>{
-    e.preventDefault();
-    if (!currentUser){ openAuth(); return; }
-    const text = pvCommentInput.value.trim(); if (!text) return;
-    await addDoc(collection(db,'photos',id,'comments'), {
-      text, authorUid: currentUser.uid, authorName: currentUser.displayName||'Без имени', at: serverTimestamp()
-    });
-    pvCommentInput.value='';
-    // подгрузим последний коммент
-    const last = await getDocs(query(collection(db,'photos',id,'comments'), orderBy('at','desc'), limit(1)));
-    last.forEach(c=>{
-      const cd=c.data();
-      const el=document.createElement('div');
+  // комментарии
+  if (unsubComments) unsubComments();
+  const commCol = collection(db,'photos', id, 'comments');
+  // порядок по времени (если возникнет просьба создать индекс – можно убрать orderBy):
+  unsubComments = onSnapshot(query(commCol, orderBy('at','asc')), (snap)=>{
+    pvComments.innerHTML='';
+    if(snap.empty){ pvComments.innerHTML='<div class="rules">Комментариев пока нет.</div>'; return; }
+    snap.forEach(c=>{
+      const cd = c.data();
+      const el = document.createElement('div');
       el.style.borderBottom='1px dashed rgba(255,255,255,.15)'; el.style.padding='6px 0';
       el.innerHTML = `<div><strong>${cd.authorName||'Аноним'}</strong> <span class="rules">${fmtDate(cd.at)}</span></div><div>${cd.text||''}</div>`;
       pvComments.appendChild(el);
-      pvComments.scrollTop = pvComments.scrollHeight;
     });
+    // всегда прокручиваем в самый низ, чтобы видеть поле ввода
+    pvComments.scrollTop = pvComments.scrollHeight;
+  });
+
+  pvCommentForm.onsubmit = async (e)=>{
+    e.preventDefault();
+    if(!currentUser){ openAuth(); return; }
+    const text = pvCommentInput.value.trim(); if(!text) return;
+    try {
+      await addDoc(collection(db,'photos', id, 'comments'), {
+        text,
+        authorUid: currentUser.uid,
+        authorName: currentUser.displayName || 'Без имени',
+        at: serverTimestamp()
+      });
+      pvCommentInput.value='';
+    }catch(err){ alert('Не удалось отправить комментарий: ' + (err?.message || err)); }
   };
 
+  // удаление фото
   pvDelete.onclick = async ()=>{
-    if (!currentUser || currentUser.uid!==data.ownerUid) return;
-    if (!confirm('Удалить это фото?')) return;
+    if(!currentUser || currentUser.uid!==data.ownerUid) return;
+    if(!confirm('Удалить это фото?')) return;
     try{
-      // Пытаемся подчистить, но даже если не всё удалилось из-за правил — удалим сам документ
-      try{
-        const lk = await getDocs(collection(db,'photos',id,'likes'));
-        await Promise.all(lk.docs.map(d=> deleteDoc(d.ref).catch(()=>{})));
-        const cm = await getDocs(collection(db,'photos',id,'comments'));
-        await Promise.all(cm.docs.map(d=> deleteDoc(d.ref).catch(()=>{})));
-      }catch(_) {}
+      const likesQ = await getDocs(collection(db,'photos', id, 'likes'));
+      for (const d of likesQ.docs) await deleteDoc(d.ref);
 
-      await deleteDoc(doc(db,'photos',id));
-      // Уберём карточку сразу визуально
-      document.querySelector(`.card[data-id="${id}"]`)?.remove();
+      const commQ = await getDocs(collection(db,'photos', id, 'comments'));
+      for (const d of commQ.docs) await deleteDoc(d.ref);
+
+      await deleteDoc(doc(db,'photos', id));
+
+      // мгновенно убрать карточку из сетки, не дожидаясь снапшота
+      const stale = galleryGrid.querySelector(`[data-id="${id}"]`);
+      if (stale) stale.remove();
+
+      alert('Фото удалено.');
       photoClose.click();
-    }catch(e){ alert('Не удалось удалить: '+(e?.message||e)); }
+    }catch(err){
+      alert('Не удалось удалить: ' + (err?.message || err));
+    }
   };
 
   openModal(photoModal);
 }
 
-/* ================== МОДЕРАЦИЯ ================== */
-async function listenModeration(){
-  if (!currentUser || !isAdmin(currentUser.uid)) { $('#mod-grid').innerHTML='<div class="rules">Нет доступа.</div>'; return; }
+/* ===== Модерация ===== */
+function listenModeration(){
+  if(!currentUser || !isAdmin(currentUser.uid)){
+    $('#mod-grid').innerHTML='<div class="rules">Нет доступа.</div>';
+    return;
+  }
+  if (unsubModeration) unsubModeration();
+
   const modGrid = $('#mod-grid');
   modGrid.innerHTML = '<div class="rules">Загрузка…</div>';
-  try{
-    const snap = await getDocs(query(collection(db,'photos'), where('approved','==', false), orderBy('createdAt','desc'), limit(48)));
-    modGrid.innerHTML='';
-    if (snap.empty){ modGrid.innerHTML='<div class="rules">Очередь пустая.</div>'; return; }
+
+  const qMod = query(collection(db,'photos'), where('approved','==', false), limit(48));
+  unsubModeration = onSnapshot(qMod, (snap)=>{
+    modGrid.textContent='';
+    if(snap.empty){ modGrid.innerHTML='<div class="rules">Очередь пустая.</div>'; return; }
+
     snap.forEach(docu=>{
-      const d=docu.data();
+      const d = docu.data();
       const card=document.createElement('div'); card.className='card';
-      const img=document.createElement('img'); img.src=d.imageURL; img.alt=d.title||'Фото';
+      const img =document.createElement('img'); img.src=d.imageURL; img.alt=d.title||'Фото';
       const meta=document.createElement('div'); meta.className='meta';
       const left=document.createElement('div'); left.innerHTML=`<strong>${d.title||'Без названия'}</strong><br><span class="rules">Автор: ${d.ownerName||''}</span>`;
       const right=document.createElement('div');
       const approve=document.createElement('button'); approve.className='btn primary'; approve.textContent='Разрешить';
-      const reject=document.createElement('button');  reject.className='btn danger';  reject.textContent='Запретить';
+      const reject =document.createElement('button'); reject.className='btn danger';  reject.textContent='Запретить';
       right.appendChild(approve); right.appendChild(reject);
       meta.appendChild(left); meta.appendChild(right);
       card.appendChild(img); card.appendChild(meta);
       modGrid.appendChild(card);
 
-      approve.addEventListener('click', async ()=>{ await updateDoc(doc(db,'photos',docu.id), { approved:true, approvedAt:serverTimestamp(), approvedBy:currentUser.uid }); card.remove(); });
+      approve.addEventListener('click', async ()=>{
+        try { await updateDoc(doc(db,'photos', docu.id), { approved:true, approvedAt:serverTimestamp(), approvedBy:currentUser.uid }); }
+        catch(err){ alert('Не удалось одобрить: ' + (err?.message || err)); }
+      });
+
       reject.addEventListener('click', async ()=>{
-        if (!confirm('Отклонить и удалить фото?')) return;
-        await deleteDoc(doc(db,'photos',docu.id));
-        card.remove();
+        if(!confirm('Отклонить и удалить фото?')) return;
+        try{
+          const likesQ=await getDocs(collection(db,'photos',docu.id,'likes')); for(const d2 of likesQ.docs) await deleteDoc(d2.ref);
+          const commQ=await getDocs(collection(db,'photos',docu.id,'comments')); for(const d3 of commQ.docs) await deleteDoc(d3.ref);
+          await deleteDoc(doc(db,'photos',docu.id));
+        }catch(err){ alert('Не удалось удалить: ' + (err?.message || err)); }
       });
     });
-  }catch(e){
+  }, (err)=>{
+    console.error(err);
     modGrid.innerHTML = '<div class="rules">Ошибка загрузки очереди.</div>';
-    console.error(e);
-  }
+  });
 }
-openModerationBtn.addEventListener('click', ()=>{
-  closeModal(profileModal);
-  openTab('mod'); openModal(library); listenModeration();
+openModerationBtn?.addEventListener('click', ()=>{
+  closeModal(profileModal); openTab('mod'); openModal(library); listenModeration();
 });
 
-/* ================== ПРОЧЕЕ ================== */
-toMyPhotos.addEventListener('click', ()=>{ closeModal(profileModal); openTab('gallery'); openModal(library); loadGallery('mine'); });
-
-/* закрытие по Esc и по клику по фону */
-window.addEventListener('keydown', e=>{
-  if (e.key==='Escape'){ [library, uploadModal, photoModal, authModal, profileModal].forEach(m=>m.classList.contains('open') && closeModal(m)); }
+/* ===== Закрытие модалок (Esc/клик по фону) ===== */
+window.addEventListener('keydown', (e)=>{
+  if(e.key==='Escape'){
+    [library, uploadModal, photoModal, authModal, profileModal]
+      .forEach(m=> m.classList.contains('open') && closeModal(m));
+  }
 });
-[library, uploadModal, photoModal, authModal, profileModal].forEach(mod=>{
-  mod.addEventListener('click', e=>{ if (e.target===mod) closeModal(mod); });
-});
+[library, uploadModal, photoModal, authModal, profileModal]
+  .forEach(mod=> mod.addEventListener('click', (e)=>{ if(e.target===mod) closeModal(mod); }));
 
-/* стартовая подгрузка галереи (лента) */
-loadGallery('all');
+/* ===== Таймер 01.01.2021 (оставляю как было) ===== */
+(function(){
+  function calc(){
+    const s=Date.UTC(2021,0,1), n=new Date(), t=Date.UTC(n.getFullYear(),n.getMonth(),n.getDate());
+    const d=Math.floor((t-s)/86400000);
+    const set=(id,val)=>{ const el=document.getElementById(id); if(el) el.textContent=val; };
+    set('days-since', d.toLocaleString('ru-RU'));
+    set('days-inline',d.toLocaleString('ru-RU'));
+    set('today', n.toLocaleDateString('ru-RU',{year:'numeric',month:'long',day:'numeric'}));
+    set('current-year', n.getFullYear());
+    set('year', n.getFullYear());
+  }
+  calc(); setInterval(calc, 60000);
+})();
 </script>
+
 
 </body>
 </html>
